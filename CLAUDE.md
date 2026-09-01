@@ -50,3 +50,54 @@ follows:
 3. The rendered, human-ready EPUB/PDF is what lands in `outputs/`.
 `outputs/` holds only converter-rendered files; raw `.md` source never
 belongs there.
+
+## Diagrams in authored documents: ASCII over 6 lines becomes Mermaid
+A hand-written ASCII flow/box diagram longer than 6 lines total renders
+badly on a Kindle screen (wraps, truncates, loses its shape — this is
+what prompted the rule). If a diagram you're authoring for one of this
+project's documents would exceed 6 lines as ASCII, write it as a
+` ```mermaid ` flowchart instead — this converter already renders those
+to embedded colour PNG images (see the `--mermaid-images` feature and
+its ROLLBACK banner around md_to_kindle.py:670). A diagram at or under
+6 lines may stay as a plain ASCII code fence.
+Stick to the parser's supported subset: `flowchart TB|TD|BT|RL|LR`
+header; node ids `[A-Za-z_][\w-]*`; shapes `[rect]`, `{diamond}`,
+`((circle))`, `(rounded)`; edges `-->`, `-.->` (dashed), `==>`, `<-->`,
+`<==>`, optionally with `|edge label|`. Favor short node labels over
+cramming full sentences into the diagram — put detailed prose in
+regular bullets next to the diagram instead, so the rendered image
+stays legible rather than a dense wall of text in boxes.
+Whenever replacing/authoring such a diagram, spawn a **separate
+sub-agent** to compare the Mermaid version against the original (ASCII
+sketch, or the intent being diagrammed) and confirm it preserves the
+same entities, order, and connections before treating it as final —
+don't just self-check your own conversion.
+
+## GPT/chat-export "Question" sections — manual vigilance
+`normalize_paren_ordered_lists()` (see above) fixes the specific `N)`
+marker case that caused this. But any numbered-question block inside a
+GPT/Claude-transcript export is a place newlines can silently collapse
+— python-markdown only breaks a paragraph on a *blank* line, so any
+future export tool or transcript style that numbers questions
+differently (bare `N `, lettered `a.`/`a)`, etc.) can hit the same
+failure mode through a different marker. When converting this kind of
+source, spot-check the rendered "Question N" / "Prompt N" boxes in the
+output EPUB/PDF for intact, separated line items — don't assume the
+existing fix covers every variant that might show up.
+
+## After any code change: push
+Any change to `md_to_kindle.py` (or other source `.py` files) that
+fixes a bug or adds a feature — once implemented and verified — gets
+committed and pushed to `origin/main` in the same turn, without
+needing to be asked. (This mandatory-push rule is specifically for
+code changes; changes to this file alone aren't required to trigger a
+push by this rule, though keeping it in sync with the same discipline
+is good practice.)
+
+## After any completed task: deliver an output file
+Every task — a code fix, a standing-instruction update, or otherwise —
+ends with a human-readable summary document handed to the user: write
+it to `inputs/`, convert it with the tool to `outputs/` (per the rule
+above), and reference that file in the reply to the user. Include any
+changes made to standing instructions (this file) in the summary,
+described in plain language — never as a raw diff.
