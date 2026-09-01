@@ -688,7 +688,7 @@ _MERMAID_HEADER_RE = re.compile(r"^(flowchart|graph)\s+(TB|TD|BT|RL|LR)\b", re.I
 _MERMAID_NODE_RE = re.compile(rf"^({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?$")
 _MERMAID_EDGE_RE = re.compile(
     rf"^({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?\s*"
-    rf"(-\.->|-->|==>)\s*"
+    rf"(<-->|<==>|-\.->|-->|==>)\s*"
     rf"(?:\|([^|]*)\|\s*)?"
     rf"({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?\s*$"
 )
@@ -790,7 +790,7 @@ def parse_mermaid_flowchart(source: str):
             src_id, src_shape, label, dst_id, dst_shape = m.groups()
             ensure_node(src_id, src_shape)
             ensure_node(dst_id, dst_shape)
-            edges.append((src_id, dst_id, (label or "").strip() or None, "dashed"))
+            edges.append((src_id, dst_id, (label or "").strip() or None, "dashed", False))
             continue
 
         m = _MERMAID_EDGE_RE.match(line)
@@ -799,7 +799,8 @@ def parse_mermaid_flowchart(source: str):
             ensure_node(src_id, src_shape)
             ensure_node(dst_id, dst_shape)
             style = "dashed" if arrow == "-.->" else "solid"
-            edges.append((src_id, dst_id, (label or "").strip() or None, style))
+            bidirectional = arrow in ("<-->", "<==>")
+            edges.append((src_id, dst_id, (label or "").strip() or None, style, bidirectional))
             continue
 
         m = _MERMAID_NODE_RE.match(line)
@@ -843,12 +844,14 @@ def render_mermaid_flowchart_image(source: str):
         shape, style = _MERMAID_SHAPE_STYLE.get(info["shape"], _MERMAID_SHAPE_STYLE[None])
         dot.node(node_id, label=label, shape=shape, style=style)
 
-    for src, dst, label, style in edges:
+    for src, dst, label, style, bidirectional in edges:
         edge_kwargs = {}
         if style == "dashed":
             edge_kwargs["style"] = "dashed"
         if label:
             edge_kwargs["label"] = label
+        if bidirectional:
+            edge_kwargs["dir"] = "both"
         dot.edge(src, dst, **edge_kwargs)
 
     try:
@@ -1514,6 +1517,37 @@ def promote_inline_dash_sublist(text: str) -> str:
     return "\n".join(out)
 
 
+_PAREN_LIST_ITEM_RE = re.compile(r"^(\s*)(\d{1,9})\)(\s+)(\S.*)$")
+
+
+def normalize_paren_ordered_lists(text: str) -> str:
+    """python-markdown's list processors (sane_lists included) only treat
+    'N.' as an ordered-list marker, not CommonMark's other valid form
+    'N)' -- a common way people (and GPT/Claude transcripts) write numbered
+    lists, which otherwise collapses into one run-on paragraph. Rewrite
+    'N)' -> 'N.' at the start of a line, but only where it's genuinely
+    opening/continuing a list (preceded by a blank line or another such
+    marker line) so an incidental parenthesized reference elsewhere in
+    prose is never touched."""
+    lines = text.split("\n")
+    fence_mask = _line_fence_mask(lines)
+    out = []
+    for i, line in enumerate(lines):
+        m = None if fence_mask[i] else _PAREN_LIST_ITEM_RE.match(line)
+        if m:
+            prev = lines[i - 1] if i > 0 else ""
+            prev_in_fence = fence_mask[i - 1] if i > 0 else False
+            prev_is_boundary = (not prev_in_fence) and (
+                prev.strip() == "" or _PAREN_LIST_ITEM_RE.match(prev) is not None
+            )
+            if prev_is_boundary:
+                indent, num, spacing, content = m.groups()
+                out.append(f"{indent}{num}.{spacing}{content}")
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
 # =====================================================================
 # --url: fetch a live web page and pull out its article content. This
 # automates what was previously a manual workflow (curl the raw HTML,
@@ -1836,9 +1870,40 @@ def strip_yaml_frontmatter(text: str) -> str:
     return text[:m.start()] + rendered + "\n" + text[m.end():]
 
 
+_TIMESTAMP_LABEL_RE = re.compile(
+    r'^(?P<prefix>\*\*(?:Created|Updated|Exported):\*\*[ \t]*)'
+    r'(?P<month>\d{1,2})/(?P<day>\d{1,2})/(?P<year>\d{4})'
+    r'[ \t]+(?P<hour>\d{1,2}):(?P<minute>\d{2}):(?P<second>\d{2})'
+    r'(?P<suffix>[ \t]*)$',
+    re.MULTILINE,
+)
+
+
+def normalize_export_timestamps(text: str) -> str:
+    """Rewrite '**Created:** 8/31/2026 9:44:08' (and Updated/Exported)
+    header lines -- the timestamp block emitted by the user's chat-export
+    tool -- to 'YYYY-mm-dd HH:MM:SS'. Source dates are unambiguously US
+    M/D/YYYY (confirmed against real exports, e.g. 8/31/2026 = Aug 31);
+    that locale is hardcoded rather than auto-detected. Seconds-precision
+    time is kept, not dropped: Created/Updated/Exported on the same
+    document always share the same calendar date in practice, so the
+    time-of-day is the only thing distinguishing them."""
+    def _replace(m):
+        y, mo, d = int(m.group('year')), int(m.group('month')), int(m.group('day'))
+        h, mi, s = int(m.group('hour')), int(m.group('minute')), int(m.group('second'))
+        try:
+            dt = datetime.datetime(y, mo, d, h, mi, s)
+        except ValueError:
+            return m.group(0)  # not a real calendar date/time -- leave untouched
+        return f"{m.group('prefix')}{dt.strftime('%Y-%m-%d %H:%M:%S')}{m.group('suffix')}"
+    return _TIMESTAMP_LABEL_RE.sub(_replace, text)
+
+
 def load_markdown(path: str):
     text = read_file(path)
     text = strip_yaml_frontmatter(text)
+    text = normalize_export_timestamps(text)
+    text = normalize_paren_ordered_lists(text)
     text = promote_inline_dash_sublist(text)
     text = ensure_blank_line_before_blocks(text)
     protected, placeholder_map = protect_math_placeholders(text)
