@@ -85,6 +85,30 @@ source, spot-check the rendered "Question N" / "Prompt N" boxes in the
 output EPUB/PDF for intact, separated line items — don't assume the
 existing fix covers every variant that might show up.
 
+## Bulleted lists: a bold header + text needs an indented sub-bullet
+A bullet shaped like `- **Header:** some more text` (or `- **Header**
+— some more text`) — a short bold/label header followed by a colon or
+dash and then a longer explanation on the same line — renders badly on
+a Kindle: the bold lead-in and the body text run together and wrap
+awkwardly, making the list hard to scan. Split it instead:
+```
+- **Header:**
+  - some more text
+```
+so the header stands alone and the detail is a nested, indented
+sub-bullet. Apply this whenever authoring a list of that shape for a
+document this tool will convert — it's specifically the
+label-then-elaboration list shape that needs splitting, not every
+bullet that happens to start with bold text (a bullet that's just a
+short bold term with no colon/dash-separated elaboration stays as-is).
+**Indent the sub-bullet by exactly 2 spaces**, not 4 — `load_markdown()`
+calls `markdown.markdown(..., tab_length=2)`, so a nested list needs
+2-space indent to parse as nested; 4 spaces gets swallowed as a lazy
+paragraph continuation of the parent `<li>` instead (confirmed by
+testing directly against the converter, not just visual inspection —
+always verify nesting renders as a real `<ul><li>` in the output
+XHTML, since this indentation width is easy to get wrong by habit).
+
 ## After any code change: push
 Any change to `md_to_kindle.py` (or other source `.py` files) that
 fixes a bug or adds a feature — once implemented and verified — gets
