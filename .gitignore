@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+outputs/
+inputs/*
+!inputs/sample_cosine_similarity.md
+!inputs/qa_multi_round_example.md
+SCRATCH_PLACEHOLDER/
+ORIGINAL_Docker_Cloud_Build.md

@@ -1,0 +1,17 @@
+markdown
+pymdown-extensions
+beautifulsoup4
+ebooklib==0.20
+lxml
+six
+matplotlib
+pillow
+pymupdf
+pygments
+reportlab
+# PROTOTYPE (Mermaid diagram image rendering) -- also requires the system
+# `dot` binary (`brew install graphviz`). Safe to delete this line to roll
+# back; the import in md_to_kindle.py is soft and degrades gracefully
+# without it. See the "Mermaid diagram image rendering" section in
+# md_to_kindle.py for the full rollback steps.
+graphviz
