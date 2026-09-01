@@ -36,3 +36,17 @@ reconvert a sample from `inputs/` covering: a file with correct `1.`
 lists, a file with the Created/Updated/Exported header, and any file
 using mermaid diagrams — this repo has no automated test suite, so
 manual EPUB inspection (unzip, check the XHTML) is the only check.
+
+## Any generated markdown deliverable goes through the tool like everything else
+When a task (e.g. this one) calls for writing a new human-readable
+document — a summary, a report, a write-up — as a deliverable, it is
+NOT a special case that gets hand-placed in `outputs/` as a raw `.md`
+file. Follow the same convention every other document in this repo
+follows:
+1. Write the markdown source into `inputs/` (not `outputs/`).
+2. Convert it with `.venv/bin/python3 md_to_kindle.py inputs/<name>.md
+   outputs/<name>.epub` (system `python3` lacks `graphviz` and other
+   deps and fails silently — always use the venv one).
+3. The rendered, human-ready EPUB/PDF is what lands in `outputs/`.
+`outputs/` holds only converter-rendered files; raw `.md` source never
+belongs there.
