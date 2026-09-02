@@ -1,5 +1,25 @@
 # md_to_kindle.py — conversion fidelity rules
 
+## Default output format is EPUB
+Every conversion defaults to EPUB. Don't ask the user which output
+format they want — just build the EPUB. Only produce a PDF when the
+user's own request explicitly names PDF; "convert this" or "prepare
+this for Kindle" on its own always means EPUB.
+
+## Editing scope: fix only what breaks rendering
+When preparing a source markdown file for conversion, only touch what
+the converter actually needs to render the file correctly — list
+markers, blank-line separation, oversized ASCII diagrams, header date
+formats, and the other structural issues this file documents.
+Spelling, grammar, wording, and phrasing are never in scope unless the
+user explicitly asks for them to be fixed — not even a single word
+swapped for punctuation reasons. If a genuine rendering defect can
+only be worked around by changing the author's own wording (e.g.
+because a converter heuristic misfires on ordinary prose), that's a
+bug in `md_to_kindle.py`, not a reason to rewrite the source text —
+fix the heuristic instead. Preparing a file for Kindle should be fast;
+treat any edit beyond a structural fix as scope creep.
+
 These are non-negotiable output-correctness rules for this converter.
 Any change to the markdown-loading pipeline (`load_markdown` and its
 preprocessing helpers, roughly lines 1420-1860) must preserve them.
@@ -70,8 +90,11 @@ stays legible rather than a dense wall of text in boxes.
 Whenever replacing/authoring such a diagram, spawn a **separate
 sub-agent** to compare the Mermaid version against the original (ASCII
 sketch, or the intent being diagrammed) and confirm it preserves the
-same entities, order, and connections before treating it as final —
-don't just self-check your own conversion.
+general spirit/shape of the diagram before treating it as final —
+don't just self-check your own conversion. This is a sanity check, not
+an exhaustive audit: the sub-agent doesn't need to verify every
+entity, ordering, and connection matches exactly, just that nothing
+important is conceptually wrong or missing.
 
 ## GPT/chat-export "Question" sections — manual vigilance
 `normalize_paren_ordered_lists()` (see above) fixes the specific `N)`

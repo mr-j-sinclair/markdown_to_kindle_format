@@ -1461,16 +1461,25 @@ def ensure_blank_line_before_blocks(text: str) -> str:
 
 _LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+\.)(\s+)(.*)$")
 _DASH_CHARS = "-–—"  # hyphen, en dash, em dash
+# Only a **bold**/**bold:** label counts as a "header" -- this must stay in
+# sync with the bold-header-bullet rule in CLAUDE.md, which is specifically
+# about a bold lead-in followed by a colon or dash, not any list item that
+# happens to contain a mid-sentence dash (splitting those rewrites the
+# author's own wording, which is out of scope -- see CLAUDE.md).
+_BOLD_HEADER_RE = re.compile(r"^\*\*[^*]+\*\*:?$")
 
 
 def _find_dash_split(content: str):
     """Locate the first standalone ' - ' / ' – ' / ' — ' delimiter in a list
-    item's text, outside of [] or () (so markdown link text isn't split)
-    and outside a **bold** span (so 'Label — detail.**' inside emphasis
-    isn't torn in half, which would leave a dangling '**' and corrupt the
-    markdown), with a few characters of label before it. Returns the
-    (start, end) span of the delimiter (including its surrounding spaces),
-    or None."""
+    item's text that immediately follows a **bold** (or **bold:**) label
+    and nothing else -- the shape CLAUDE.md documents as needing a
+    sub-bullet split. Ignores dashes inside [] or () (so markdown link text
+    isn't split), inside a **bold** span (so 'Label — detail.**' inside
+    emphasis isn't torn in half, which would leave a dangling '**' and
+    corrupt the markdown), and any dash not preceded by a bare bold label
+    (an ordinary sentence with a dash in it, e.g. inside a numbered
+    question, is left untouched). Returns the (start, end) span of the
+    delimiter (including its surrounding spaces), or None."""
     depth_sq = depth_paren = 0
     in_bold = False
     n = len(content)
@@ -1492,14 +1501,18 @@ def _find_dash_split(content: str):
         elif (c in _DASH_CHARS and depth_sq == 0 and depth_paren == 0 and not in_bold
               and i >= 3 and content[i - 1] == " "
               and i + 1 < n and content[i + 1] == " "):
-            return (i - 1, i + 2)
+            head = content[:i - 1].rstrip()
+            if _BOLD_HEADER_RE.match(head):
+                return (i - 1, i + 2)
         i += 1
     return None
 
 
 def promote_inline_dash_sublist(text: str) -> str:
-    """Turn a list item like '- Use of RAG - RAG uses vector indexes...'
-    into a bullet with its own nested sub-bullet."""
+    """Turn a list item like '- **RAG** - RAG uses vector indexes...' into
+    a bullet with its own nested sub-bullet. Only fires when the text
+    before the dash is a bare bold label (see _BOLD_HEADER_RE) -- an
+    ordinary sentence that happens to contain a dash is left alone."""
     lines = text.split("\n")
     fence_mask = _line_fence_mask(lines)
     out = []
