@@ -1912,10 +1912,50 @@ def normalize_export_timestamps(text: str) -> str:
     return _TIMESTAMP_LABEL_RE.sub(_replace, text)
 
 
+_METADATA_LABEL_LINE_RE = re.compile(r'^\*\*[^*\n]+:\*\*(?:\s|$)')
+
+
+def insert_metadata_line_breaks(text: str) -> str:
+    """A run of consecutive '**Label:** value' lines (Author/Posted/Source,
+    Title/Author/Published/Publication/Source, etc.) with no blank line
+    between them collapses into one run-on paragraph -- python-markdown
+    only breaks paragraphs on a blank line. Append a markdown hard break
+    (two trailing spaces) to each such line that is immediately followed
+    by another matching line, so they render as stacked separate lines
+    within one grouped paragraph -- matching how the Created/Updated/
+    Exported header block already renders (those source lines already
+    happen to carry trailing double-spaces) -- rather than blank-line-
+    separating them into distinct <p> blocks with extra paragraph spacing.
+    Anchored at column 0, so a bulleted '- **Header:** text' sub-list item
+    (which always has a leading '- ') is never matched. A no-op on lines
+    that already end with two trailing spaces, so re-running this (or
+    running it over already-hard-broken input like the Created/Updated/
+    Exported block) never doubles up breaks."""
+    lines = text.split("\n")
+    fence_mask = _line_fence_mask(lines)
+    n = len(lines)
+    out = []
+    for i, line in enumerate(lines):
+        if fence_mask[i] or not _METADATA_LABEL_LINE_RE.match(line):
+            out.append(line)
+            continue
+        next_matches = (
+            i + 1 < n
+            and not fence_mask[i + 1]
+            and _METADATA_LABEL_LINE_RE.match(lines[i + 1])
+        )
+        if next_matches and not line.endswith("  "):
+            out.append(line + "  ")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def load_markdown(path: str):
     text = read_file(path)
     text = strip_yaml_frontmatter(text)
     text = normalize_export_timestamps(text)
+    text = insert_metadata_line_breaks(text)
     text = normalize_paren_ordered_lists(text)
     text = promote_inline_dash_sublist(text)
     text = ensure_blank_line_before_blocks(text)
@@ -1929,7 +1969,7 @@ def load_markdown(path: str):
         # use_pygments=False keeps render_code_block() as the sole place
         # doing Pygments highlighting, so output shape stays unchanged for
         # top-level code blocks.
-        extensions=["tables", "pymdownx.superfences", "pymdownx.highlight", "sane_lists", "toc"],
+        extensions=["tables", "pymdownx.superfences", "pymdownx.highlight", "pymdownx.magiclink", "sane_lists", "toc"],
         extension_configs={"pymdownx.highlight": {"use_pygments": False}},
         tab_length=2,
     )
