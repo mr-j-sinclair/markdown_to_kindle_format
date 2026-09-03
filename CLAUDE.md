@@ -90,7 +90,7 @@
 ## Completion and source control
 
 - After implementing and verifying a bug fix or feature in `md_to_kindle.py` or another source `.py` file, commit it and push it to `origin/main` in the same turn without waiting to be asked.
-- Do not automatically commit or push a `CLAUDE.md`-only change; leave it uncommitted unless the user explicitly requests otherwise.
+- A `CLAUDE.md`-only change is also committed and pushed to `origin/main` in the same turn, without waiting to be asked.
 - Other cases require explicit user direction unless another instruction covers them.
 - Produce a human-readable converted summary document only for changes to source `.py` files, dependencies, or the runtime environment/virtual environment.
 - Write such a summary in `inputs/`, convert it into `outputs/`, and reference the rendered artifact in the reply.
