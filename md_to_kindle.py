@@ -1389,7 +1389,22 @@ def resolve_mermaid_diagrams(soup, image_registry, enabled=True):
     registered through the same ImageRegistry as every other embedded
     image. Left completely untouched (falls through to the normal
     plain-text code-block rendering) when the feature is off, graphviz
-    isn't available, or a given diagram can't be parsed."""
+    isn't available, or a given diagram can't be parsed.
+
+    Also catches a plain, *untagged* ``` fence (no `language-mermaid` class
+    at all) whose content is unambiguously Mermaid syntax -- i.e.
+    render_mermaid_image() recognises its header keyword and parses it
+    successfully. This is a deliberate safety net: source HTML for blog
+    articles often marks a code block's language via a `data-language`
+    attribute on the outer element (e.g. Astro/Shiki's
+    `<pre data-language="mermaid">`) rather than a `language-mermaid` class
+    on `<code>`, so when that HTML is hand-transcribed into Markdown it's
+    easy to drop the ```mermaid tag and paste a bare ``` fence instead. A
+    fence explicitly tagged as some other language (```python, ```json,
+    ...) is never reinterpreted -- only a fence with no language class at
+    all gets this fallback check, and it only fires when the content
+    parses as a real diagram (matches a Mermaid header keyword AND yields
+    at least one node), so ordinary code is never misdetected."""
     if not enabled:
         return
     for pre in list(soup.find_all("pre")):
@@ -1397,9 +1412,10 @@ def resolve_mermaid_diagrams(soup, image_registry, enabled=True):
         if code is None:
             continue
         classes = code.get("class") or []
-        if "language-mermaid" not in classes:
+        text = code.get_text()
+        if "language-mermaid" not in classes and classes:
             continue
-        png = render_mermaid_image(code.get_text())
+        png = render_mermaid_image(text)
         if png is None:
             continue
         rel_path = image_registry.register(png, media_type="image/png", prefix="mermaid")
