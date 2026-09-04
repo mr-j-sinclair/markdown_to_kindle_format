@@ -1577,7 +1577,7 @@ def normalize_paren_ordered_lists(text: str) -> str:
     return "\n".join(out)
 
 
-_BARE_HASHTAG_RE = re.compile(r"^#{1,6}(?=\S)")
+_LEADING_HASHES_RE = re.compile(r"^#+")
 
 
 def escape_bare_hashtags(text: str) -> str:
@@ -1590,13 +1590,24 @@ def escape_bare_hashtags(text: str) -> str:
     split_chapters(), silently eating the leading '#' and misfiling the
     rest of the document under a bogus chapter title. Escape the leading
     marker so it renders as plain text instead; a genuine heading always
-    has a space after its '#'s, so those are left untouched."""
+    has a space after its '#'s, so those are left untouched.
+
+    Deliberately checks the character following the *whole* run of
+    leading '#'s via plain string indexing rather than a regex lookahead:
+    a lookahead of the form '#{1,6}(?=\\S)' lets the engine backtrack to
+    matching just one '#' and then treat the next '#' in a multi-'#'
+    heading (e.g. '## Heading') as satisfying \\S, wrongly flagging every
+    real H2-H6 heading too."""
     lines = text.split("\n")
     fence_mask = _line_fence_mask(lines)
     out = []
     for i, line in enumerate(lines):
-        if not fence_mask[i] and _BARE_HASHTAG_RE.match(line):
-            line = "\\" + line
+        if not fence_mask[i]:
+            m = _LEADING_HASHES_RE.match(line)
+            if m:
+                rest = line[m.end():]
+                if rest and not rest[0].isspace():
+                    line = "\\" + line
         out.append(line)
     return "\n".join(out)
 
