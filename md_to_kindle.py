@@ -1577,6 +1577,30 @@ def normalize_paren_ordered_lists(text: str) -> str:
     return "\n".join(out)
 
 
+_BARE_HASHTAG_RE = re.compile(r"^#{1,6}(?=\S)")
+
+
+def escape_bare_hashtags(text: str) -> str:
+    """A line-leading '#' immediately followed by a non-space character
+    (social-media style, e.g. '#RelationshipScience #EmotionalIntelligence'
+    at the end of a LinkedIn post) is a hashtag, not an ATX heading.
+    CommonMark requires a space after the '#', but python-markdown doesn't
+    enforce that -- it happily parses such a line as an <h1>/<h2>/etc,
+    which then also acts as a chapter-splitting boundary in
+    split_chapters(), silently eating the leading '#' and misfiling the
+    rest of the document under a bogus chapter title. Escape the leading
+    marker so it renders as plain text instead; a genuine heading always
+    has a space after its '#'s, so those are left untouched."""
+    lines = text.split("\n")
+    fence_mask = _line_fence_mask(lines)
+    out = []
+    for i, line in enumerate(lines):
+        if not fence_mask[i] and _BARE_HASHTAG_RE.match(line):
+            line = "\\" + line
+        out.append(line)
+    return "\n".join(out)
+
+
 # =====================================================================
 # --url: fetch a live web page and pull out its article content. This
 # automates what was previously a manual workflow (curl the raw HTML,
@@ -1973,6 +1997,7 @@ def load_markdown(path: str):
     text = normalize_export_timestamps(text)
     text = insert_metadata_line_breaks(text)
     text = normalize_paren_ordered_lists(text)
+    text = escape_bare_hashtags(text)
     text = promote_inline_dash_sublist(text)
     text = ensure_blank_line_before_blocks(text)
     protected, placeholder_map = protect_math_placeholders(text)
