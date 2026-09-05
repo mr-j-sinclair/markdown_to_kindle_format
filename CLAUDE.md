@@ -52,10 +52,7 @@
 
 ### Images and videos
 
-- For an image that cannot be embedded normally, try these fallbacks in order:
-  1. Download it directly.
-  2. If blocked, capture it with a browser screenshot and embed that file.
-  3. If neither works, insert text at its original position stating that an image was present but could not be captured.
+- For an image that cannot be embedded normally, try these fallbacks in order: download it directly; if blocked, capture it with a browser screenshot and embed that file; if neither works, insert text at its original position stating that an image was present but could not be captured.
 - Never silently omit an image.
 - For a video, capture a representative fully loaded frame, avoiding spinners or play-button overlays where possible.
 - Label the embedded frame explicitly as a screenshot from a video, not a photograph.
@@ -63,10 +60,7 @@
 ## Verification
 
 - This repository has no automated test suite; inspect generated EPUB XHTML manually by unzipping the EPUB rather than relying only on visual appearance.
-- After changing `load_markdown()` or a preprocessing helper, reconvert representative inputs covering:
-  - Correct ordinary `1.` ordered lists
-  - `Created`/`Updated`/`Exported` chat timestamps
-  - Mermaid diagrams
+- After changing `load_markdown()` or a preprocessing helper, reconvert representative inputs covering: ordinary `1.` ordered lists, `Created`/`Updated`/`Exported` chat timestamps, and Mermaid diagrams.
 - For label/detail bullets, verify real nested `<ul><li>` output.
 - For chat exports, inspect rendered Question/Prompt boxes for intact line separation.
 - For Mermaid work, inspect the rendered image for Kindle legibility and obtain the independent semantic check required above.
@@ -79,6 +73,8 @@
 - Always use `.venv/bin/python3`; system Python lacks required dependencies such as Graphviz and may fail silently.
 - `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
 - Whether to append `--no-send-to-kindle` depends on what's being converted; see "Send-to-Kindle delivery."
+- Name `<name>` after that item's own title/subject (slugified), never a generic or shared batch name (e.g. not `linkedin_posts_2026-09-05`); this filename becomes the Send-to-Kindle email's attachment name via `os.path.basename()`, so a generic name ships a generic attachment.
+- When the user hands over several distinct sources in one request (e.g. multiple pasted links), run the full pipeline separately per source: its own `inputs/<name>.md`, its own `outputs/<name>.epub`, and, once eligible, its own separate Send-to-Kindle email. Never merge independent sources into one Markdown file or one email, even if they share a platform, date, or topic — one combined file for unrelated LinkedIn posts is the canonical mistake to avoid.
 
 ## Send-to-Kindle delivery
 
@@ -97,6 +93,7 @@
 
 ## Linked social posts and articles
 
+- This two-section structure is for one post plus the single article it links to — the same source, split into two views. It never justifies bundling multiple independent posts/links the user pasted together into one document; see "Inputs and outputs" above for that case.
 - When a social post links to a separate detailed article, create two sections in this order:
   1. `## <Platform> Post`
   2. `## Actual Article`

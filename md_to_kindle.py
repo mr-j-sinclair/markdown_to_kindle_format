@@ -3595,14 +3595,21 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
 _PASTE_EXTENSIONS = {"md": ".md", "html": ".html", "txt": ".txt"}
 
 
-def save_pasted_input(text: str, fmt: str) -> str:
+def save_pasted_input(text: str, fmt: str, title: str = None) -> str:
     """Save pasted content (e.g. copied straight out of a ChatGPT reply)
     into inputs/ as a real file, timestamped, so it's kept alongside any
-    file-based inputs rather than only ever existing as a stdin stream."""
+    file-based inputs rather than only ever existing as a stdin stream.
+
+    When a title is known (--title was passed alongside --paste), the file
+    is named after it instead of the generic "pasted_" prefix, since this
+    filename flows through unchanged as the output filename and, in turn,
+    the Send-to-Kindle email attachment name -- see kindle_delivery.py."""
     os.makedirs(INPUT_DIR, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     ext = _PASTE_EXTENSIONS[fmt]
-    input_path = os.path.join(INPUT_DIR, f"pasted_{ts}{ext}")
+    slug = _slugify_title(title) if title else None
+    stem = slug if slug else "pasted"
+    input_path = os.path.join(INPUT_DIR, f"{stem}_{ts}{ext}")
     with open(input_path, "w", encoding="utf-8") as f:
         f.write(text)
     return input_path
@@ -3724,7 +3731,7 @@ def main():
             text = sys.stdin.read()
         if not text.strip():
             parser.error("no content received on stdin for --paste")
-        input_path = save_pasted_input(text, args.format)
+        input_path = save_pasted_input(text, args.format, title=args.title)
         print(f"Saved pasted input to {input_path}")
     else:
         if not os.path.exists(args.input):
