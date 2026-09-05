@@ -216,6 +216,18 @@ account's approved personal-document sender list.
 
 ### One-time setup
 
+Neither email address is hardcoded anywhere in this repo -- this tool may
+be used by more than one person, or the addresses may change -- so both
+are **required environment variables**. Add them to your shell profile
+(e.g. `~/.zshrc`) so every invocation picks them up:
+
+```bash
+export MD_TO_KINDLE_SENDER_EMAIL="your-dedicated-account@gmail.com"
+export MD_TO_KINDLE_DEST_EMAIL="yourname@kindle.com"
+```
+
+Then:
+
 1. Create a Google **App Password** for the dedicated Gmail account (this
    requires 2-Step Verification to be enabled on that account) at
    <https://myaccount.google.com/apppasswords>.
@@ -226,7 +238,8 @@ account's approved personal-document sender list.
    You'll be prompted for the password with input hidden; it's saved in
    your OS's native credential store (macOS Keychain / Windows Credential
    Locker) via the `keyring` package, service name
-   `markdown_to_kindle_format` -- never written to a file in this repo.
+   `markdown_to_kindle_format` and account name = the value of
+   `MD_TO_KINDLE_SENDER_EMAIL` -- never written to a file in this repo.
 3. Confirm the dedicated Gmail address is on Amazon's list of approved
    personal-document senders (**Manage Your Content and Devices** ->
    **Preferences** -> **Personal Document Settings** on amazon.com).
@@ -239,13 +252,18 @@ To remove the stored credential, run
 
 ### Configuration
 
-The sender/destination addresses are constants in `kindle_delivery.py`
-(`SENDER_EMAIL`, `DEST_EMAIL`), overridable via the `MD_TO_KINDLE_SENDER_EMAIL`
-/ `MD_TO_KINDLE_DEST_EMAIL` environment variables if you ever need to point
-at a different account without editing source. For CI/headless use where
-no OS keyring backend exists, set `MD_TO_KINDLE_APP_PASSWORD` in the
-environment -- keyring is always tried first and is the preferred local
-mechanism.
+- `MD_TO_KINDLE_SENDER_EMAIL` (required) -- the dedicated Gmail sender
+  address; also used as the keyring account name for the App Password.
+- `MD_TO_KINDLE_DEST_EMAIL` (required) -- your Kindle's `@kindle.com`
+  address.
+- `MD_TO_KINDLE_APP_PASSWORD` (optional) -- fallback for CI/headless use
+  where no OS keyring backend exists; keyring is always tried first and
+  is the preferred local mechanism.
+
+Running any Send-to-Kindle action (a default/explicit send, or
+`--set-kindle-password`/`--clear-kindle-password`) without
+`MD_TO_KINDLE_SENDER_EMAIL` (and, for sending, `MD_TO_KINDLE_DEST_EMAIL`)
+set fails with a clear error rather than guessing an address.
 
 ### Failure behavior
 

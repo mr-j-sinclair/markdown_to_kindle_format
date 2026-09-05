@@ -34,6 +34,28 @@ class ShouldSendToKindleTests(unittest.TestCase):
         self.assertFalse(kd.should_send_to_kindle(False, "pdf"))
 
 
+class ConfigTests(unittest.TestCase):
+    def test_get_sender_email_missing_raises(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(kd.ENV_SENDER_EMAIL, None)
+            with self.assertRaises(kd.MissingConfigError):
+                kd.get_sender_email()
+
+    def test_get_sender_email_from_env(self):
+        with patch.dict(os.environ, {kd.ENV_SENDER_EMAIL: "sender@example.com"}):
+            self.assertEqual(kd.get_sender_email(), "sender@example.com")
+
+    def test_get_dest_email_missing_raises(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(kd.ENV_DEST_EMAIL, None)
+            with self.assertRaises(kd.MissingConfigError):
+                kd.get_dest_email()
+
+    def test_get_dest_email_from_env(self):
+        with patch.dict(os.environ, {kd.ENV_DEST_EMAIL: "dest@kindle.com"}):
+            self.assertEqual(kd.get_dest_email(), "dest@kindle.com")
+
+
 class CredentialTests(unittest.TestCase):
     def test_get_app_password_from_keyring(self):
         with patch.object(kd.keyring, "get_password", return_value=DUMMY_PASSWORD):
@@ -128,7 +150,8 @@ class SendToKindleTests(unittest.TestCase):
         with patch.object(kd, "get_app_password", return_value=DUMMY_PASSWORD), \
              patch.object(kd.smtplib, "SMTP_SSL", mock_smtp_ssl):
             with self.assertRaises(kd.SmtpAuthError) as ctx:
-                kd.send_to_kindle(self.tmp_path)
+                kd.send_to_kindle(self.tmp_path, sender_email="sender@example.com",
+                                   dest_email="dest@kindle.com")
             self.assertNotIn(DUMMY_PASSWORD, str(ctx.exception))
 
     def test_smtp_connection_failure(self):
@@ -136,7 +159,8 @@ class SendToKindleTests(unittest.TestCase):
         with patch.object(kd, "get_app_password", return_value=DUMMY_PASSWORD), \
              patch.object(kd.smtplib, "SMTP_SSL", mock_smtp_ssl):
             with self.assertRaises(kd.SmtpConnectionError) as ctx:
-                kd.send_to_kindle(self.tmp_path)
+                kd.send_to_kindle(self.tmp_path, sender_email="sender@example.com",
+                                   dest_email="dest@kindle.com")
             self.assertNotIn(DUMMY_PASSWORD, str(ctx.exception))
 
 

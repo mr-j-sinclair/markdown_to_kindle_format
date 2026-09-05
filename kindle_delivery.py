@@ -9,6 +9,11 @@ passed on the command line. It's read from the OS keyring (macOS Keychain /
 Windows Credential Locker, via the `keyring` package), with an environment
 variable as a fallback for CI/headless use. See get_app_password().
 
+Configuration: neither the sender Gmail address nor the destination Kindle
+address is hardcoded here either -- this tool may be used by someone else,
+or the addresses may change, so both are required environment variables
+(see get_sender_email()/get_dest_email()) rather than source defaults.
+
 Delivery contract: a successful send means Gmail accepted the email for
 delivery -- it does NOT mean Amazon has confirmed the document landed in
 the Kindle library. That confirmation (or rejection) is a separate,
@@ -21,17 +26,14 @@ from email.message import EmailMessage
 import keyring
 import keyring.errors
 
-# ---------- Non-secret configuration ----------
-# Overridable via environment variables for CI/headless use or if the
-# dedicated account/destination ever changes; otherwise these constants are
-# the source of truth.
-SENDER_EMAIL = os.environ.get("MD_TO_KINDLE_SENDER_EMAIL", "kindle_sender@gmail.com")
-DEST_EMAIL = os.environ.get("MD_TO_KINDLE_DEST_EMAIL", "jjbadsinclair@kindle.com")
+# ---------- Configuration ----------
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465
 SMTP_TIMEOUT = 30
 
 KEYRING_SERVICE = "markdown_to_kindle_format"
+ENV_SENDER_EMAIL = "MD_TO_KINDLE_SENDER_EMAIL"
+ENV_DEST_EMAIL = "MD_TO_KINDLE_DEST_EMAIL"
 ENV_APP_PASSWORD = "MD_TO_KINDLE_APP_PASSWORD"  # fallback only; keyring is preferred
 
 _ATTACHMENT_MIME = {
@@ -42,6 +44,10 @@ _ATTACHMENT_MIME = {
 
 class KindleDeliveryError(Exception):
     """Base class for all Send-to-Kindle delivery failures."""
+
+
+class MissingConfigError(KindleDeliveryError):
+    pass
 
 
 class MissingCredentialError(KindleDeliveryError):
@@ -68,6 +74,28 @@ class UnsupportedFormatError(KindleDeliveryError):
     pass
 
 
+def get_sender_email():
+    """Return the configured sender Gmail address, or raise MissingConfigError."""
+    email = os.environ.get(ENV_SENDER_EMAIL)
+    if not email:
+        raise MissingConfigError(
+            f"{ENV_SENDER_EMAIL} is not set -- set it to the dedicated "
+            f"Gmail sender address before using Send-to-Kindle delivery"
+        )
+    return email
+
+
+def get_dest_email():
+    """Return the configured destination Kindle address, or raise MissingConfigError."""
+    email = os.environ.get(ENV_DEST_EMAIL)
+    if not email:
+        raise MissingConfigError(
+            f"{ENV_DEST_EMAIL} is not set -- set it to your Kindle's "
+            f"@kindle.com address before using Send-to-Kindle delivery"
+        )
+    return email
+
+
 def should_send_to_kindle(send_flag, output_format):
     """Resolve the --send-to-kindle/--no-send-to-kindle default.
 
@@ -88,7 +116,7 @@ def get_app_password(username=None):
     environment variable. Never includes the credential value in any
     raised exception message.
     """
-    username = username or SENDER_EMAIL
+    username = username or get_sender_email()
     backend_error = None
     password = None
     try:
@@ -116,7 +144,7 @@ def get_app_password(username=None):
 
 def set_app_password(password, username=None):
     """Store the Gmail App Password in the OS keyring."""
-    username = username or SENDER_EMAIL
+    username = username or get_sender_email()
     try:
         keyring.set_password(KEYRING_SERVICE, username, password)
     except keyring.errors.KeyringError as e:
@@ -128,7 +156,7 @@ def clear_app_password(username=None):
 
     A no-op (not an error) if nothing was stored.
     """
-    username = username or SENDER_EMAIL
+    username = username or get_sender_email()
     try:
         keyring.delete_password(KEYRING_SERVICE, username)
     except keyring.errors.PasswordDeleteError:
@@ -145,9 +173,6 @@ def send_to_kindle(file_path, sender_email=None, dest_email=None):
     function cannot observe. Raises a KindleDeliveryError subclass on any
     failure; never leaves the source file touched.
     """
-    sender_email = sender_email or SENDER_EMAIL
-    dest_email = dest_email or DEST_EMAIL
-
     if not os.path.exists(file_path):
         raise MissingFileError(f"file not found: {file_path}")
 
@@ -157,6 +182,8 @@ def send_to_kindle(file_path, sender_email=None, dest_email=None):
         raise UnsupportedFormatError(f"unsupported file extension for Kindle delivery: {ext}")
     maintype, subtype = mime
 
+    sender_email = sender_email or get_sender_email()
+    dest_email = dest_email or get_dest_email()
     password = get_app_password(sender_email)
 
     filename = os.path.basename(file_path)

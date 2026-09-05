@@ -3683,7 +3683,7 @@ def main():
             sys.exit(1)
         try:
             kindle_delivery.set_app_password(password)
-        except kindle_delivery.KeyringBackendError as e:
+        except kindle_delivery.KindleDeliveryError as e:
             print(f"error: could not store credential: {e}", file=sys.stderr)
             sys.exit(1)
         print("Stored.")
@@ -3692,7 +3692,7 @@ def main():
     if args.clear_kindle_password:
         try:
             kindle_delivery.clear_app_password()
-        except kindle_delivery.KeyringBackendError as e:
+        except kindle_delivery.KindleDeliveryError as e:
             print(f"error: could not clear credential: {e}", file=sys.stderr)
             sys.exit(1)
         print("Cleared.")
@@ -3755,7 +3755,7 @@ def main():
     if kindle_delivery.should_send_to_kindle(args.send_to_kindle, output_format):
         try:
             kindle_delivery.send_to_kindle(output_path)
-            print(f"Emailed {output_path} to {kindle_delivery.DEST_EMAIL} "
+            print(f"Emailed {output_path} to {kindle_delivery.get_dest_email()} "
                   f"(Gmail accepted it; Amazon converts/delivers it into your "
                   f"Kindle library separately)")
         except kindle_delivery.KindleDeliveryError as e:
