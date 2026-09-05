@@ -5,8 +5,7 @@
 - EPUB is always the default. Do not ask which format to use.
 - Produce PDF only when the user explicitly requests PDF; "convert this" or "prepare this for Kindle" means EPUB.
 - When preparing source Markdown, change only structures required for correct rendering, such as list markers, blank-line separation, oversized ASCII diagrams, and header-date formats.
-- Do not alter spelling, grammar, wording, or phrasing unless explicitly requested.
-- If correct rendering would require changing the author's wording, treat that as a converter bug and fix the heuristic instead.
+- Do not alter spelling, grammar, wording, or phrasing unless explicitly requested; if correct rendering would require changing the author's wording, treat that as a converter bug and fix the heuristic instead.
 - Treat non-structural edits as scope creep.
 - Changes to `load_markdown()` or any preprocessing helper must preserve every guarantee in this file.
 
@@ -63,12 +62,11 @@
 
 ## Verification
 
-- This repository has no automated test suite; inspect generated EPUB XHTML manually.
+- This repository has no automated test suite; inspect generated EPUB XHTML manually by unzipping the EPUB rather than relying only on visual appearance.
 - After changing `load_markdown()` or a preprocessing helper, reconvert representative inputs covering:
   - Correct ordinary `1.` ordered lists
   - `Created`/`Updated`/`Exported` chat timestamps
   - Mermaid diagrams
-- Unzip the EPUB and inspect its XHTML rather than relying only on visual appearance.
 - For label/detail bullets, verify real nested `<ul><li>` output.
 - For chat exports, inspect rendered Question/Prompt boxes for intact line separation.
 - For Mermaid work, inspect the rendered image for Kindle legibility and obtain the independent semantic check required above.
@@ -76,18 +74,19 @@
 ## Inputs and outputs
 
 - Put every generated human-readable Markdown deliverable—summary, report, or write-up—in `inputs/`.
-- Convert it using the virtual-environment interpreter, with an `.epub` or `.pdf` destination per the output-format rules above, always appending `--no-send-to-kindle`:
-  `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub --no-send-to-kindle`
+- Convert it using the virtual-environment interpreter, with an `.epub` or `.pdf` destination per the output-format rules above:
+  `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub`
 - Always use `.venv/bin/python3`; system Python lacks required dependencies such as Graphviz and may fail silently.
 - `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
+- Whether to append `--no-send-to-kindle` depends on what's being converted; see "Send-to-Kindle delivery."
 
 ## Send-to-Kindle delivery
 
 - Delivery logic lives only in `kindle_delivery.py`; conversion code must never import `smtplib`/`keyring` directly.
 - Never hardcode, log, print, or write the Gmail App Password anywhere—source, docs, tracebacks, or generated summaries.
-- `--send-to-kindle`/`--no-send-to-kindle` default to sending after a successful EPUB conversion only; PDF output is never auto-sent, even if passed explicitly.
+- `--send-to-kindle`/`--no-send-to-kindle` default to sending after a successful EPUB conversion only; PDF output is never auto-sent, even if passed explicitly. This default is implemented in the software itself, not a Claude-side choice.
 - No hidden retries and no send-deduplication; a rerun of the command re-sends by design.
-- Every conversion command run for development, regression testing, or summary-doc generation must include `--no-send-to-kindle`, per the command in "Inputs and outputs" above.
+- Suppress sending with `--no-send-to-kindle` only for conversions about the software itself (development/regression runs, the source-change summary doc from "Completion and source control"); any conversion the user actually asked for—an article, social post, email, note, or other content deliverable—is a real delivery, not a dev artifact, so let it auto-send.
 
 ## Completion and source control
 
@@ -105,14 +104,15 @@
 - In the article section, independently determine its title, author, publication date, content, and images.
 - Do not assume the post author and article author are the same person.
 - Locate the actual article target from the original post/page first; the link-preview target is often more reliable than an inline shortened URL.
-- Treat a user-supplied or shortened URL only as a fallback candidate, and verify that it resolves to the post's actual linked article.
-- Never invent or guess a target URL.
+- Treat a user-supplied or shortened URL only as a fallback candidate; verify it resolves to the post's actual linked article, and never invent or guess a target URL.
 - Apply the two-section structure even when the post and article are hosted on the same platform.
 
 ## Copyright-limited content
 
 - Applies to any source (linked article, email attachment, etc.), not just social posts.
 - If full text can't be reproduced for copyright reasons and is summarized or truncated, disclose that explicitly inside the output document.
+- Name both the Markdown source and the converted output file to say so explicitly, e.g. append `_summary` (`article_summary.md`, `article_summary.epub`).
+- Make the very first line of the output document an explicit warning that the content is summarized, immediately followed by a clickable link to the original source; don't bury this notice further down the page.
 - Always include a verified working link to the original source inside the EPUB/PDF.
 
 ## Email ingestion
