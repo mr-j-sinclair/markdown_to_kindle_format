@@ -14,19 +14,16 @@
 
 ### Ordered lists
 
-- Both `N.` and `N)` markers must render as genuine `<ol>` lists.
-- Run `normalize_paren_ordered_lists()` before `markdown.markdown()`.
+- Both `N.` and `N)` markers must render as genuine `<ol>` lists via `normalize_paren_ordered_lists()`, run before `markdown.markdown()`.
 - Keep this normalizer general; do not tailor it to one input file.
 - Unless regression testing justifies a change, convert `N)` only when preceded by a blank line or another `N)` item.
 - Verify `inputs/Second_brain_Introduction.md` after changing list detection; its `N)` and ordinary `1.` lists must both remain correct.
 
 ### Export timestamps
 
-- Normalize chat-export `Created`, `Updated`, and `Exported` values from hardcoded US-locale `M/D/YYYY H:MM:SS` to `YYYY-mm-dd HH:MM:SS`.
-- Do not auto-detect the source locale.
-- Never leave the date component in `M/D/YYYY` form.
+- Normalize chat-export `Created`, `Updated`, and `Exported` values (via `normalize_export_timestamps()` from `load_markdown()`) from hardcoded US-locale `M/D/YYYY H:MM:SS` to `YYYY-mm-dd HH:MM:SS`.
+- Do not auto-detect the source locale; never leave the date component in `M/D/YYYY` form.
 - Retain the time component because it may be the only difference among the three timestamps.
-- Apply this through `normalize_export_timestamps()` from `load_markdown()`.
 - Do not apply this chat-export normalization to ordinary email `From`/`Date` metadata.
 
 ### List presentation
@@ -52,8 +49,7 @@
   - Shapes: `[rect]`, `{diamond}`, `((circle))`, `(rounded)`
   - Edges: `-->`, `-.->`, `==>`, `<-->`, `<==>`, optionally with `|edge label|`
 - Keep node labels short; place detailed prose in adjacent regular bullets.
-- Whenever authoring or replacing a diagram, use a separate sub-agent to compare it with the original sketch or intended meaning.
-- The sub-agent must confirm that the general spirit and shape are preserved and that nothing important is conceptually wrong or missing; an exhaustive entity-by-entity audit is unnecessary.
+- Whenever authoring or replacing a diagram, use a separate sub-agent to confirm the general spirit/shape match the original and nothing important is conceptually wrong or missing; an exhaustive entity-by-entity audit is unnecessary.
 
 ### Images and videos
 
@@ -80,20 +76,24 @@
 ## Inputs and outputs
 
 - Put every generated human-readable Markdown deliverable—summary, report, or write-up—in `inputs/`.
-- Convert it using the virtual-environment interpreter:
-  `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub`
-- Use an `.epub` or `.pdf` destination according to the output-format rules above.
+- Convert it using the virtual-environment interpreter, with an `.epub` or `.pdf` destination per the output-format rules above, always appending `--no-send-to-kindle`:
+  `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub --no-send-to-kindle`
 - Always use `.venv/bin/python3`; system Python lacks required dependencies such as Graphviz and may fail silently.
-- `outputs/` contains only converter-rendered EPUB/PDF files.
-- Never place raw `.md` source in `outputs/`.
+- `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
+
+## Send-to-Kindle delivery
+
+- Delivery logic lives only in `kindle_delivery.py`; conversion code must never import `smtplib`/`keyring` directly.
+- Never hardcode, log, print, or write the Gmail App Password anywhere—source, docs, tracebacks, or generated summaries.
+- `--send-to-kindle`/`--no-send-to-kindle` default to sending after a successful EPUB conversion only; PDF output is never auto-sent, even if passed explicitly.
+- No hidden retries and no send-deduplication; a rerun of the command re-sends by design.
+- Every conversion command run for development, regression testing, or summary-doc generation must include `--no-send-to-kindle`, per the command in "Inputs and outputs" above.
 
 ## Completion and source control
 
-- After implementing and verifying a bug fix or feature in `md_to_kindle.py` or another source `.py` file, commit it and push it to `origin/main` in the same turn without waiting to be asked.
-- A `CLAUDE.md`-only change is also committed and pushed to `origin/main` in the same turn, without waiting to be asked.
+- After implementing and verifying a bug fix or feature in a source `.py` file, or making a `CLAUDE.md`-only change, commit it and push it to `origin/main` in the same turn without waiting to be asked.
 - Other cases require explicit user direction unless another instruction covers them.
-- Produce a human-readable converted summary document only for changes to source `.py` files, dependencies, or the runtime environment/virtual environment.
-- Write such a summary in `inputs/`, convert it into `outputs/`, and reference the rendered artifact in the reply.
+- Produce a human-readable converted summary document (written to `inputs/`, converted into `outputs/`, and referenced in the reply) only for changes to source `.py` files, dependencies, or the runtime environment/virtual environment.
 - Do not create a summary document for Markdown preparation, formatting/list/diagram fixes, reconversion, rendering-only edits, or `CLAUDE.md` edits; a chat reply is sufficient.
 
 ## Linked social posts and articles

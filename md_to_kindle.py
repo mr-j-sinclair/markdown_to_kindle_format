@@ -59,6 +59,8 @@ from pygments.util import ClassNotFound
 
 from ebooklib import epub
 
+import kindle_delivery
+
 from reportlab.lib.pagesizes import LETTER as _PDF_LETTER, A4 as _PDF_A4
 from reportlab.lib.units import inch as _pdf_inch
 from reportlab.lib import colors as _pdf_colors
@@ -3606,7 +3608,7 @@ def save_pasted_input(text: str, fmt: str) -> str:
     return input_path
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description="Convert Markdown/HTML/Text/PDF into a Kindle-ready EPUB, or a paginated PDF."
     )
@@ -3654,7 +3656,47 @@ def main():
                               "Requires the Graphviz `dot` binary and `pip install graphviz`; silently "
                               "falls back to the old behaviour per-diagram if either is missing or a "
                               "given diagram doesn't parse.")
+    parser.add_argument("--send-to-kindle", dest="send_to_kindle",
+                         action=argparse.BooleanOptionalAction, default=None,
+                         help="Email the generated EPUB to your Kindle after conversion "
+                              "(default: on for EPUB output, off for PDF -- Send-to-Kindle "
+                              "delivery never applies to PDF, even if passed explicitly). "
+                              "--no-send-to-kindle disables it explicitly.")
+    parser.add_argument("--set-kindle-password", action="store_true",
+                         help="Prompt for the Gmail App Password used for Send-to-Kindle delivery "
+                              "and store it in the OS keyring, then exit without converting anything.")
+    parser.add_argument("--clear-kindle-password", action="store_true",
+                         help="Remove the stored Gmail App Password from the OS keyring, then exit "
+                              "without converting anything.")
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
+
+    if args.set_kindle_password:
+        import getpass
+        password = getpass.getpass("Gmail App Password (input hidden): ")
+        if not password.strip():
+            print("error: App Password cannot be empty", file=sys.stderr)
+            sys.exit(1)
+        try:
+            kindle_delivery.set_app_password(password)
+        except kindle_delivery.KeyringBackendError as e:
+            print(f"error: could not store credential: {e}", file=sys.stderr)
+            sys.exit(1)
+        print("Stored.")
+        return
+
+    if args.clear_kindle_password:
+        try:
+            kindle_delivery.clear_app_password()
+        except kindle_delivery.KeyringBackendError as e:
+            print(f"error: could not clear credential: {e}", file=sys.stderr)
+            sys.exit(1)
+        print("Cleared.")
+        return
 
     sources_given = sum([bool(args.input), args.paste, bool(args.url)])
     if sources_given > 1:
@@ -3709,6 +3751,20 @@ def main():
             mermaid_images=(args.mermaid_images == "on"), output_format=output_format,
             page_size=args.page_size, footer=args.footer)
     print(f"Wrote {output_path}")
+
+    if kindle_delivery.should_send_to_kindle(args.send_to_kindle, output_format):
+        try:
+            kindle_delivery.send_to_kindle(output_path)
+            print(f"Emailed {output_path} to {kindle_delivery.DEST_EMAIL} "
+                  f"(Gmail accepted it; Amazon converts/delivers it into your "
+                  f"Kindle library separately)")
+        except kindle_delivery.KindleDeliveryError as e:
+            print(f"warning: {output_path} was generated successfully, but "
+                  f"Kindle delivery failed: {e}", file=sys.stderr)
+            sys.exit(2)
+    elif output_format != "epub" and args.send_to_kindle:
+        print("note: Send-to-Kindle only applies to EPUB output; "
+              "skipping delivery for PDF.", file=sys.stderr)
 
 
 if __name__ == "__main__":

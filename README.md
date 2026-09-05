@@ -188,6 +188,80 @@ else (a "subscribe"/"login" widget, a comments box, related-posts links)
 is saved as a real file, it's fine to open it and manually trim anything
 unwanted before running the conversion, same as any other input.
 
+## Send to Kindle
+
+After a successful **EPUB** conversion, the generated file is automatically
+emailed to your Kindle's `@kindle.com` address via Amazon's "Send to Kindle
+by email" mechanism, using a dedicated Gmail account over SMTP. This is
+**on by default** -- no flag needed for the normal case:
+
+```bash
+python3 md_to_kindle.py input.md
+# generates outputs/input.epub AND emails it to your Kindle
+```
+
+Pass `--no-send-to-kindle` to generate the EPUB without sending it, or
+`--send-to-kindle` to make an explicit "yes, send" opt-in visible in a
+script. **PDF output is never auto-sent**, even if `--send-to-kindle` is
+passed explicitly -- a notice is printed and delivery is skipped, since
+this tool's Kindle path is EPUB-first.
+
+**What "sent" actually means:** a successful send only confirms that
+*Gmail accepted the email* -- it does **not** confirm that Amazon has
+converted the attachment and added it to your Kindle library. That's a
+separate, asynchronous step on Amazon's side (typically a couple of
+minutes) that this tool has no visibility into. If a document never shows
+up, check that the dedicated Gmail address is still on your Amazon
+account's approved personal-document sender list.
+
+### One-time setup
+
+1. Create a Google **App Password** for the dedicated Gmail account (this
+   requires 2-Step Verification to be enabled on that account) at
+   <https://myaccount.google.com/apppasswords>.
+2. Store it locally:
+   ```bash
+   python3 md_to_kindle.py --set-kindle-password
+   ```
+   You'll be prompted for the password with input hidden; it's saved in
+   your OS's native credential store (macOS Keychain / Windows Credential
+   Locker) via the `keyring` package, service name
+   `markdown_to_kindle_format` -- never written to a file in this repo.
+3. Confirm the dedicated Gmail address is on Amazon's list of approved
+   personal-document senders (**Manage Your Content and Devices** ->
+   **Preferences** -> **Personal Document Settings** on amazon.com).
+4. Test it with a small file: `python3 md_to_kindle.py
+   inputs/sample_cosine_similarity.md outputs/smoke_test.epub` and confirm
+   it lands in your Kindle library within a few minutes.
+
+To remove the stored credential, run
+`python3 md_to_kindle.py --clear-kindle-password`.
+
+### Configuration
+
+The sender/destination addresses are constants in `kindle_delivery.py`
+(`SENDER_EMAIL`, `DEST_EMAIL`), overridable via the `MD_TO_KINDLE_SENDER_EMAIL`
+/ `MD_TO_KINDLE_DEST_EMAIL` environment variables if you ever need to point
+at a different account without editing source. For CI/headless use where
+no OS keyring backend exists, set `MD_TO_KINDLE_APP_PASSWORD` in the
+environment -- keyring is always tried first and is the preferred local
+mechanism.
+
+### Failure behavior
+
+- Kindle delivery only ever starts **after** the EPUB is fully written to
+  `outputs/`; a failed conversion never attempts to send anything, and a
+  failed send never touches the already-written EPUB.
+- If conversion succeeds but delivery fails (missing/invalid credential,
+  Gmail auth rejection, network/SMTP failure), the file is still on disk,
+  a clear message is printed to stderr, and the process exits with code
+  `2` (distinct from exit `1`, reserved for conversion failure) so scripts
+  can tell partial success apart from total failure.
+- There are **no automatic retries and no duplicate-send protection** --
+  a transient network failure is not silently retried (to avoid ever
+  risking a duplicate Kindle document), and rerunning the command re-sends
+  by design.
+
 ## Mermaid diagrams
 
 Fenced ` ```mermaid ` code blocks are rendered to embedded colour images

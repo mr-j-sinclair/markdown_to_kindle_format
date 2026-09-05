@@ -9,6 +9,7 @@ pillow
 pymupdf
 pygments
 reportlab
+keyring
 # PROTOTYPE (Mermaid diagram image rendering) -- also requires the system
 # `dot` binary (`brew install graphviz`). Safe to delete this line to roll
 # back; the import in md_to_kindle.py is soft and degrades gracefully
