@@ -792,7 +792,7 @@ def parse_mermaid_flowchart(source: str):
             src_id, src_shape, label, dst_id, dst_shape = m.groups()
             ensure_node(src_id, src_shape)
             ensure_node(dst_id, dst_shape)
-            edges.append((src_id, dst_id, (label or "").strip() or None, "dashed", False))
+            edges.append((src_id, dst_id, _mermaid_clean_label(label) or None, "dashed", False))
             continue
 
         m = _MERMAID_EDGE_RE.match(line)
@@ -802,7 +802,7 @@ def parse_mermaid_flowchart(source: str):
             ensure_node(dst_id, dst_shape)
             style = "dashed" if arrow == "-.->" else "solid"
             bidirectional = arrow in ("<-->", "<==>")
-            edges.append((src_id, dst_id, (label or "").strip() or None, style, bidirectional))
+            edges.append((src_id, dst_id, _mermaid_clean_label(label) or None, style, bidirectional))
             continue
 
         m = _MERMAID_NODE_RE.match(line)
@@ -1938,7 +1938,11 @@ def strip_yaml_frontmatter(text: str) -> str:
 
 _TIMESTAMP_LABEL_RE = re.compile(
     r'^(?P<prefix>\*\*(?:Created|Updated|Exported):\*\*[ \t]*)'
-    r'(?P<month>\d{1,2})/(?P<day>\d{1,2})/(?P<year>\d{4})'
+    r'(?:'
+    r'(?P<year1>\d{4})/(?P<month1>\d{1,2})/(?P<day1>\d{1,2})'  # YYYY/M/D
+    r'|'
+    r'(?P<month2>\d{1,2})/(?P<day2>\d{1,2})/(?P<year2>\d{4})'  # M/D/YYYY
+    r')'
     r'[ \t]+(?P<hour>\d{1,2}):(?P<minute>\d{2}):(?P<second>\d{2})'
     r'(?P<suffix>[ \t]*)$',
     re.MULTILINE,
@@ -1950,12 +1954,18 @@ def normalize_export_timestamps(text: str) -> str:
     header lines -- the timestamp block emitted by the user's chat-export
     tool -- to 'YYYY-mm-dd HH:MM:SS'. Source dates are unambiguously US
     M/D/YYYY (confirmed against real exports, e.g. 8/31/2026 = Aug 31);
-    that locale is hardcoded rather than auto-detected. Seconds-precision
-    time is kept, not dropped: Created/Updated/Exported on the same
-    document always share the same calendar date in practice, so the
-    time-of-day is the only thing distinguishing them."""
+    that locale is hardcoded rather than auto-detected. Some exporters
+    (e.g. ChatGPT Exporter) instead emit YYYY/M/D, which is unambiguous
+    by construction (a 4-digit group can only be the year) and needs no
+    locale guessing, so both source orderings are recognized. Seconds-
+    precision time is kept, not dropped: Created/Updated/Exported on the
+    same document always share the same calendar date in practice, so
+    the time-of-day is the only thing distinguishing them."""
     def _replace(m):
-        y, mo, d = int(m.group('year')), int(m.group('month')), int(m.group('day'))
+        if m.group('year1') is not None:
+            y, mo, d = int(m.group('year1')), int(m.group('month1')), int(m.group('day1'))
+        else:
+            y, mo, d = int(m.group('year2')), int(m.group('month2')), int(m.group('day2'))
         h, mi, s = int(m.group('hour')), int(m.group('minute')), int(m.group('second'))
         try:
             dt = datetime.datetime(y, mo, d, h, mi, s)
