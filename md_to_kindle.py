@@ -1960,7 +1960,9 @@ def normalize_export_timestamps(text: str) -> str:
     locale guessing, so both source orderings are recognized. Seconds-
     precision time is kept, not dropped: Created/Updated/Exported on the
     same document always share the same calendar date in practice, so
-    the time-of-day is the only thing distinguishing them."""
+    the time-of-day is the only thing distinguishing them. Fence-masked
+    like the other normalizers below, so a literal example of this header
+    format shown inside a code block is left untouched."""
     def _replace(m):
         if m.group('year1') is not None:
             y, mo, d = int(m.group('year1')), int(m.group('month1')), int(m.group('day1'))
@@ -1972,7 +1974,12 @@ def normalize_export_timestamps(text: str) -> str:
         except ValueError:
             return m.group(0)  # not a real calendar date/time -- leave untouched
         return f"{m.group('prefix')}{dt.strftime('%Y-%m-%d %H:%M:%S')}{m.group('suffix')}"
-    return _TIMESTAMP_LABEL_RE.sub(_replace, text)
+    lines = text.split("\n")
+    fence_mask = _line_fence_mask(lines)
+    return "\n".join(
+        line if fence_mask[i] else _TIMESTAMP_LABEL_RE.sub(_replace, line)
+        for i, line in enumerate(lines)
+    )
 
 
 _METADATA_LABEL_LINE_RE = re.compile(r'^\*\*[^*\n]+:\*\*(?:\s|$)')
