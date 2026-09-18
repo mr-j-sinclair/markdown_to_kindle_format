@@ -84,6 +84,16 @@ class InsertMetadataLineBreaksTests(unittest.TestCase):
         text = "- **Header:** explanation\n- **Other:** more\n"
         self.assertEqual(mtk.insert_metadata_line_breaks(text), text)
 
+    def test_fenced_code_block_left_untouched(self):
+        text = (
+            "Intro.\n\n"
+            "```text\n"
+            "**Author:** Jane\n"
+            "**Posted:** 2026-01-01\n"
+            "```\n"
+        )
+        self.assertEqual(mtk.insert_metadata_line_breaks(text), text)
+
 
 class EnsureBlankLineBeforeBlocksTests(unittest.TestCase):
     def test_inserts_missing_blank_line_before_list(self):
@@ -98,6 +108,16 @@ class EnsureBlankLineBeforeBlocksTests(unittest.TestCase):
 
     def test_already_correct_markdown_unchanged(self):
         text = "Some paragraph\n\n- item one\n- item two\n"
+        self.assertEqual(mtk.ensure_blank_line_before_blocks(text), text)
+
+    def test_fenced_code_block_left_untouched(self):
+        text = (
+            "Intro.\n\n"
+            "```text\n"
+            "Some paragraph\n"
+            "- item one\n"
+            "```\n"
+        )
         self.assertEqual(mtk.ensure_blank_line_before_blocks(text), text)
 
 

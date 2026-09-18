@@ -36,15 +36,19 @@ def _all_xhtml_text(epub_path):
         return "\n".join(zf.read(n).decode("utf-8") for n in names)
 
 
+def _convert_sample_markdown(output_dir):
+    input_path = os.path.join(output_dir, "sample.md")
+    output_path = os.path.join(output_dir, "sample.epub")
+    with open(input_path, "w", encoding="utf-8") as f:
+        f.write(SAMPLE_MARKDOWN)
+    mtk.convert(input_path, output_path)
+    return output_path
+
+
 class ConversionIntegrationTests(unittest.TestCase):
     def test_ordered_lists_and_timestamp_render_correctly(self):
         with tempfile.TemporaryDirectory() as tmp:
-            input_path = os.path.join(tmp, "sample.md")
-            output_path = os.path.join(tmp, "sample.epub")
-            with open(input_path, "w", encoding="utf-8") as f:
-                f.write(SAMPLE_MARKDOWN)
-
-            mtk.convert(input_path, output_path)
+            output_path = _convert_sample_markdown(tmp)
 
             self.assertTrue(os.path.exists(output_path))
             xhtml = _all_xhtml_text(output_path)
@@ -53,8 +57,11 @@ class ConversionIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(xhtml.count("<ol>"), 2)
             self.assertIn("2026-08-31 09:44:08", xhtml)
 
-            if shutil.which("dot") is None:
-                self.skipTest("graphviz 'dot' binary not on PATH; skipping Mermaid render check")
+    @unittest.skipUnless(shutil.which("dot"), "graphviz 'dot' binary not on PATH")
+    def test_mermaid_diagram_renders_to_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = _convert_sample_markdown(tmp)
+            xhtml = _all_xhtml_text(output_path)
             self.assertIn("<img", xhtml)
 
 
