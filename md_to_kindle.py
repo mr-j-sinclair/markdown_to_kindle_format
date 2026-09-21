@@ -38,6 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from collections import Counter, defaultdict
 
 import markdown
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -662,7 +663,15 @@ def resolve_remote_images(soup, image_registry):
 # diagram declares -- the reader also uses their Kindle in landscape, so a
 # wide diagram isn't automatically a worse fit than a tall one, and forcing
 # everything to portrait would misrepresent diagrams the author explicitly
-# laid out horizontally.
+# laid out horizontally. One exception: a single node with more children
+# than the graph is deep (e.g. a directory tree's top level) renders as an
+# extremely wide, short strip under a top-to-bottom rankdir, since Graphviz
+# spreads same-rank siblings across the horizontal axis -- illegible even
+# in landscape once the fan-out is wide enough. `_flowchart_effective_direction`
+# detects that specific shape and flips just that diagram's axis so the
+# fan-out stacks vertically instead; it leaves an author-declared LR/RL
+# alone since that's an intentional landscape choice, not a rankdir
+# side effect.
 #
 # Since this renders a real (albeit colour, unlike ASCII) diagram, a
 # ```mermaid fence that parses successfully doesn't need an accompanying
@@ -750,6 +759,65 @@ def _mermaid_clean_label(text):
     return text
 
 
+def _directed_graph_longest_path_nodes(edges):
+    """Longest directed path through `edges` (a flowchart/state edge list;
+    each item's first two elements are src_id, dst_id -- any trailing
+    elements such as labels are ignored), measured in node count. Used by
+    `_flowchart_effective_direction` as a depth proxy. Returns None if the
+    graph contains a cycle, since "longest path" isn't well-defined there
+    and the caller should leave direction untouched rather than guess."""
+    children = defaultdict(list)
+    all_nodes = set()
+    for edge in edges:
+        src, dst = edge[0], edge[1]
+        children[src].append(dst)
+        all_nodes.add(src)
+        all_nodes.add(dst)
+
+    memo = {}
+    visiting = set()
+
+    def longest_from(node):
+        if node in memo:
+            return memo[node]
+        if node in visiting:
+            return None  # cycle
+        visiting.add(node)
+        best = 1
+        for nxt in children.get(node, ()):
+            deeper = longest_from(nxt)
+            if deeper is None:
+                visiting.discard(node)
+                return None
+            best = max(best, 1 + deeper)
+        visiting.discard(node)
+        memo[node] = best
+        return best
+
+    longest = 1
+    for node in all_nodes:
+        depth = longest_from(node)
+        if depth is None:
+            return None
+        longest = max(longest, depth)
+    return longest
+
+
+def _flowchart_effective_direction(direction, edges):
+    """Correct a top-to-bottom `direction` ("TB"/"BT") to the matching
+    left-to-right one ("LR"/"RL") when the graph's widest fan-out (the most
+    children any single node has) exceeds its longest chain -- see the
+    "Layout direction" note in the module banner above for why. Any other
+    declared direction is returned unchanged."""
+    if direction not in ("TB", "BT"):
+        return direction
+    max_fanout = max(Counter(edge[0] for edge in edges).values(), default=1)
+    depth = _directed_graph_longest_path_nodes(edges)
+    if depth is not None and max_fanout > depth:
+        return "LR" if direction == "TB" else "RL"
+    return direction
+
+
 def parse_mermaid_flowchart(source: str):
     """Parse a minimal subset of Mermaid `flowchart`/`graph` syntax into
     (direction, nodes, edges). Returns None for anything this parser
@@ -831,10 +899,12 @@ def render_mermaid_flowchart_image(source: str):
     direction, nodes, edges = parsed
     if not nodes:
         return None
+    direction = _flowchart_effective_direction(direction, edges)
 
     dot = _graphviz.Digraph(format="png")
     # rankdir mirrors the source's own declared direction -- see the module
-    # banner above for why this isn't forced to portrait.
+    # banner above for why this isn't forced to portrait (and for the one
+    # fan-out exception `_flowchart_effective_direction` applies above).
     dot.attr(rankdir=direction, bgcolor="white", nodesep="0.35", ranksep="0.45", dpi=_MERMAID_DPI)
     dot.attr("node", fontname="Helvetica", fontsize="14", fontcolor=_MERMAID_TEXT,
               fillcolor=_MERMAID_FILL, color=_MERMAID_STROKE, penwidth="1.4")
@@ -963,6 +1033,7 @@ def render_mermaid_state_image(source: str):
     direction, nodes, edges = parsed
     if not nodes:
         return None
+    direction = _flowchart_effective_direction(direction, edges)
 
     dot = _graphviz.Digraph(format="png")
     dot.attr(rankdir=direction, bgcolor="white", nodesep="0.35", ranksep="0.45", dpi=_MERMAID_DPI)
