@@ -37,11 +37,22 @@ a judgment call you make by hand while preparing the source Markdown:
 
 - In authored documents, split a label-plus-explanation bullet into a parent
   and nested bullet: `- **Header:**` followed by `  - explanation`.
-- Apply this when a bold label is followed by a colon or dash and
-  substantial explanatory text — whether that text originally sat on the
-  same line or the next one.
-- Do not split a short bold-only bullet that has no colon/dash-separated
-  elaboration; that would be restructuring content that didn't need it.
+- Apply this when a bullet (or numbered item) opens with a bold run-in
+  heading followed by explanatory text — whether that text originally sat
+  on the same line or the next one. A run-in heading is bold text that
+  stands on its own:
+  - a label ending in a colon or dash (`**Keys:** …`, `**Keys** – …`), or
+  - a complete bold sentence/phrase ending in `.`/`?`/`!`
+    (`**Offline fallback.** Setting …`).
+  Keep the bold text, including its punctuation, as the parent line.
+- For a numbered item, keep the `N.` parent and indent the nested bullet
+  three spaces (`1. **Label:**` / `   - explanation`) so numbering stays
+  intact.
+- Do not split when the bold text is just the opening words of a sentence
+  that continues past it (`**Facts are stored individually**, not as one
+  blob.`, `**Live mode** makes calls to …`); that would break the author's
+  sentence apart.
+- Do not split a bold-only bullet with nothing after it.
 - Indent the nested bullet by exactly two spaces (`load_markdown()` calls
   `markdown.markdown()` with `tab_length=2`, so a different indent won't
   nest correctly).
