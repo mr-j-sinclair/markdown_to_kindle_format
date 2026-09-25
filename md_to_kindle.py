@@ -76,6 +76,7 @@ from reportlab.platypus import (
     Preformatted as _PdfPreformatted,
     HRFlowable as _PdfHRFlowable,
     Image as _PdfImage,
+    Indenter as _PdfIndenter,
 )
 from reportlab.pdfbase import pdfmetrics as _pdf_metrics
 from reportlab.pdfbase.ttfonts import TTFont as _PdfTTFont
@@ -2906,6 +2907,99 @@ def _register_pdf_mono_font() -> str:
 
 _PDF_MONO_FONT_NAME = _register_pdf_mono_font()
 
+
+# ---------------------------------------------------------------------
+# Glyph fallback: emoji/symbols the PDF fonts can't draw.
+# Neither Helvetica (+ reportlab's Symbol/ZapfDingbats substitution) nor
+# the mono TTF has emoji such as ✅ ⚠ ❌ ⏳, and Monaco also lacks ✓. Left
+# alone, reportlab draws a black box (■) in body text and silently drops
+# the character in inline code. Instead, each such character is rasterized
+# from macOS's Apple Color Emoji via Pillow and embedded as a small inline
+# <img>. Characters the emoji font also lacks (e.g. ✓ in inline code) are
+# switched to Helvetica when its substitution fonts cover them. If the
+# emoji font is absent, text is left as before.
+# ROLLBACK: delete this block, tests/test_pdf_rendering.py (glyph tests), and in
+# _pdf_walk_inline() restore escape_x() for the two `_pdf_text_markup(...)`
+# calls and the fixed backColor on inline code.
+# ---------------------------------------------------------------------
+_PDF_EMOJI_FONT_PATH = "/System/Library/Fonts/Apple Color Emoji.ttc"
+_PDF_EMOJI_STRIKE = 160  # a bitmap size the sbix emoji font actually ships
+_PDF_GLYPH_IMG_PT = 9.0
+_PDF_VARIATION_SELECTORS = {"︎", "️"}
+_pdf_glyph_img_cache = {}  # char -> PNG path, or None if not renderable
+_pdf_glyph_img_dir = None
+
+
+def _pdf_font_has_char(font_name: str, ch: str) -> bool:
+    font = _pdf_metrics.getFont(font_name)
+    face = getattr(font, "face", None)
+    if face is not None and hasattr(face, "charToGlyph"):  # TrueType font
+        return ord(ch) in face.charToGlyph
+    for f in [font] + list(getattr(font, "substitutionFonts", [])):
+        try:
+            ch.encode(f.encName)
+            return True
+        except (UnicodeEncodeError, LookupError):
+            continue
+    return False
+
+
+def _pdf_glyph_image_path(ch: str):
+    global _pdf_glyph_img_dir
+    if ch in _pdf_glyph_img_cache:
+        return _pdf_glyph_img_cache[ch]
+    path = None
+    if os.path.exists(_PDF_EMOJI_FONT_PATH):
+        try:
+            from PIL import ImageDraw, ImageFont
+            font = ImageFont.truetype(_PDF_EMOJI_FONT_PATH, _PDF_EMOJI_STRIKE)
+            if font.getmask(ch).getbbox():  # glyph exists in the emoji font
+                size = int(_PDF_EMOJI_STRIKE * 1.3)
+                img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+                ImageDraw.Draw(img).text((0, 0), ch, font=font, embedded_color=True)
+                bbox = img.getbbox()
+                if bbox:
+                    if _pdf_glyph_img_dir is None:
+                        import tempfile
+                        _pdf_glyph_img_dir = tempfile.mkdtemp(prefix="md_to_kindle_glyphs_")
+                    path = os.path.join(_pdf_glyph_img_dir, f"u{ord(ch):x}.png")
+                    img.crop(bbox).save(path)
+        except Exception:
+            path = None
+    _pdf_glyph_img_cache[ch] = path
+    return path
+
+
+def _pdf_text_markup(text: str, font_name: str = "Helvetica") -> str:
+    """escape_x(text), except characters `font_name` can't draw become
+    inline emoji images (see the glyph-fallback note above)."""
+    if all(ord(c) < 0x2000 for c in text):
+        return escape_x(text)  # fast path: Latin/punctuation is always covered
+    out = []
+    run = []
+    for ch in text:
+        if ch in _PDF_VARIATION_SELECTORS:
+            continue  # invisible emoji/text presentation selector
+        if ord(ch) >= 0x2000 and not _pdf_font_has_char(font_name, ch):
+            path = _pdf_glyph_image_path(ch)
+            if path:
+                out.append(escape_x("".join(run)))
+                run = []
+                out.append(f'<img src="{escape_x(path)}" width="{_PDF_GLYPH_IMG_PT}" '
+                           f'height="{_PDF_GLYPH_IMG_PT}" valign="-1.5"/>')
+                continue
+            if font_name != "Helvetica" and _pdf_font_has_char("Helvetica", ch):
+                # e.g. ✓: not in the emoji font, but Helvetica's ZapfDingbats
+                # substitution has it.
+                out.append(escape_x("".join(run)))
+                run = []
+                out.append(f'<font face="Helvetica">{escape_x(ch)}</font>')
+                continue
+        run.append(ch)
+    out.append(escape_x("".join(run)))
+    return "".join(out)
+# --------------------- end glyph fallback block ----------------------
+
 # Palette matches this tool's own EPUB CSS (build_css()) and md_to_pdf.py's
 # palette, so a document's PDF and EPUB renderings feel like the same
 # product rather than two unrelated designs.
@@ -2978,7 +3072,7 @@ _PDF_EQIMG_HEIGHT_EM_RE = re.compile(r"height:\s*([\d.]+)em")
 
 def _pdf_walk_inline(node, parts):
     if isinstance(node, NavigableString):
-        parts.append(escape_x(str(node)))
+        parts.append(_pdf_text_markup(str(node)))
         return
     if not isinstance(node, Tag):
         return
@@ -3003,8 +3097,12 @@ def _pdf_walk_inline(node, parts):
             # Covers both plain inline code and math-fallback (raw LaTeX
             # shown as text when mathtext couldn't render it) -- same
             # shaded-monospace treatment as the EPUB CSS gives both.
-            parts.append(f'<font face="{_PDF_MONO_FONT_NAME}" size="8.4" color="#a3123b" backColor="#f4f6fa">')
-            parts.append(escape_x(node.get_text()))
+            code_markup = _pdf_text_markup(node.get_text(), _PDF_MONO_FONT_NAME)
+            # reportlab paints backColor over inline <img>s, so a code span
+            # holding a glyph-fallback image drops its shading.
+            back = "" if "<img " in code_markup else ' backColor="#f4f6fa"'
+            parts.append(f'<font face="{_PDF_MONO_FONT_NAME}" size="8.4" color="#a3123b"{back}>')
+            parts.append(code_markup)
             parts.append("</font>")
     elif name == "a":
         parts.append('<font color="#2f6fed"><u>')
@@ -3215,6 +3313,24 @@ class PdfRenderer:
         cache[level] = style
         return style
 
+    @staticmethod
+    def _split_li_code_blocks(nodes):
+        """_split_children_and_images(), plus ('pre', tag) segments for
+        code blocks, in document order."""
+        segments = []
+        run = []
+        for node in nodes:
+            if isinstance(node, Tag) and node.name == "pre":
+                if run:
+                    segments.extend(_split_children_and_images(run))
+                    run = []
+                segments.append(("pre", node))
+            else:
+                run.append(node)
+        if run:
+            segments.extend(_split_children_and_images(run))
+        return segments
+
     def render_list(self, tag, ordered=False, level=0):
         flowables = []
         counter = 1
@@ -3229,7 +3345,26 @@ class PdfRenderer:
             # flowable, same as a paragraph/table cell -- the bullet marker
             # attaches to whichever flowable comes first in the item.
             bullet_used = False
-            for kind, payload in _split_children_and_images(own_children):
+            for kind, payload in self._split_li_code_blocks(own_children):
+                if kind == "pre":
+                    # A fenced code block inside a list item: render it as a
+                    # real code block indented under the item's text, not
+                    # flattened into one line of inline code.
+                    if not bullet_used:
+                        flowables.append(_PdfParagraph("", style, bulletText=bullet_text))
+                        bullet_used = True
+                    indent = style.leftIndent
+                    saved_width = self.content_width
+                    self.content_width = saved_width - indent
+                    try:
+                        flowables.append(_PdfIndenter(left=indent))
+                        flowables.append(_PdfSpacer(1, 2))
+                        flowables.append(self.render_code_block(payload))
+                        flowables.append(_PdfSpacer(1, 4))
+                        flowables.append(_PdfIndenter(left=-indent))
+                    finally:
+                        self.content_width = saved_width
+                    continue
                 if kind == "text":
                     text = _pdf_inline_markup(payload).strip()
                     if text:
