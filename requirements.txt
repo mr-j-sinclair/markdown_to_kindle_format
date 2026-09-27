@@ -1,6 +1,8 @@
 markdown
 pymdown-extensions
 beautifulsoup4
+# Word .docx attachments (order-of-service skill: .claude/skills/order-of-service/scripts/extract_oos.py)
+python-docx
 ebooklib==0.20
 lxml
 six

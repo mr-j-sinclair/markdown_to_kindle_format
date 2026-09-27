@@ -15,6 +15,8 @@ Before preparing or modifying any document content for this pipeline — normali
 
 It covers: `N.`/`N)` ordered-list normalization edge cases, the six-line ASCII-diagram-to-Mermaid threshold and the supported Mermaid subset, image/video capture fallback order, label-plus-explanation bullet splitting, full `.eml` parsing and attachment handling, and the linked-post/article two-section structure.
 
+For a church Order of Service / notices email, also invoke the `order-of-service` Skill (after `kindle-doc-prep`); it owns that document's format, responsive-reading type preservation, and web-fetched GNT readings.
+
 ## Sub-agent verification
 
 - Before spawning a sub-agent to verify an edited diagram or other structural change against its original, snapshot the untouched file to the session scratchpad first — before any Edit call touches the real file — then give the verifier (fork or fresh) both the snapshot and the edited file to read itself; never a paraphrase pasted into the prompt. An exhaustive entity-by-entity audit is unnecessary — confirm the general spirit/shape matches and nothing important is conceptually wrong or missing.
