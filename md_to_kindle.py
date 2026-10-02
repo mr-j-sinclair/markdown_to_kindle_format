@@ -660,19 +660,22 @@ def resolve_remote_images(soup, image_registry):
 # failure falls straight back to the tool's original behaviour: the raw
 # fence text shown as a plain shaded code block.
 #
-# Layout direction (LR/TD/RL/BT) is kept faithful to whatever the source
-# diagram declares -- the reader also uses their Kindle in landscape, so a
-# wide diagram isn't automatically a worse fit than a tall one, and forcing
-# everything to portrait would misrepresent diagrams the author explicitly
-# laid out horizontally. One exception: a single node with more children
-# than the graph is deep (e.g. a directory tree's top level) renders as an
-# extremely wide, short strip under a top-to-bottom rankdir, since Graphviz
-# spreads same-rank siblings across the horizontal axis -- illegible even
-# in landscape once the fan-out is wide enough. `_flowchart_effective_direction`
-# detects that specific shape and flips just that diagram's axis so the
-# fan-out stacks vertically instead; it leaves an author-declared LR/RL
-# alone since that's an intentional landscape choice, not a rankdir
-# side effect.
+# Layout direction (LR/TD/RL/BT) starts from whatever the source diagram
+# declares, with two corrections for e-ink legibility:
+#   1. `_flowchart_effective_direction`: a single node with more children
+#      than the graph is deep (e.g. a directory tree's top level) renders as
+#      an extremely wide, short strip under a top-to-bottom rankdir, since
+#      Graphviz spreads same-rank siblings across the horizontal axis -- that
+#      shape is detected up front and flipped to LR/RL before rendering.
+#   2. `_pipe_kindle_orientation`: after rendering, if the image is a long
+#      strip that must shrink to fit a portrait Kindle page (`_KINDLE_PAGE_PX`)
+#      -- e.g. a 6-node `flowchart LR` chain rendered 2500px wide -- it's
+#      re-rendered with the axis flipped (LR<->TB, RL<->BT), and the flipped
+#      version is kept if it shows the text at least `_MERMAID_FLIP_MIN_GAIN`
+#      times larger. Diagrams that already fit, or that don't improve
+#      enough, keep the author's declared direction. (Earlier versions kept
+#      a declared LR unconditionally because the reader also uses landscape;
+#      the user later asked for long strips to be auto-flipped -- 2026-10-02.)
 #
 # Since this renders a real (albeit colour, unlike ASCII) diagram, a
 # ```mermaid fence that parses successfully doesn't need an accompanying
@@ -924,6 +927,38 @@ def parse_mermaid_flowchart(source: str):
     return direction, nodes, edges
 
 
+# Smallest current Kindle screen, portrait (Kindle / Paperwhite 3-4), in px.
+_KINDLE_PAGE_PX = (1072, 1448)
+# How much larger the flipped orientation must make the text before it's
+# preferred over the author's declared direction.
+_MERMAID_FLIP_MIN_GAIN = 1.25
+_FLIPPED_RANKDIR = {"LR": "TB", "RL": "BT", "TB": "LR", "BT": "RL"}
+
+
+def _kindle_fit_scale(png: bytes) -> float:
+    """How much a PNG must shrink to fit one portrait Kindle page (1.0 =
+    shown at full size). Text size on the device scales with this."""
+    width, height = Image.open(io.BytesIO(png)).size
+    page_w, page_h = _KINDLE_PAGE_PX
+    return min(1.0, page_w / width, page_h / height)
+
+
+def _pipe_kindle_orientation(dot, direction):
+    """Render `dot`; if the result is a long strip that has to shrink to fit
+    a Kindle page, re-render with the axis flipped (LR<->TB, RL<->BT) and
+    keep whichever shows the text meaningfully larger. See "Layout
+    direction" in the module banner."""
+    png = dot.pipe()
+    scale = _kindle_fit_scale(png)
+    if scale < 1.0 and direction in _FLIPPED_RANKDIR:
+        # A later graph-level rankdir statement overrides the earlier one.
+        dot.attr(rankdir=_FLIPPED_RANKDIR[direction])
+        flipped = dot.pipe()
+        if _kindle_fit_scale(flipped) >= _MERMAID_FLIP_MIN_GAIN * scale:
+            return flipped
+    return png
+
+
 def render_mermaid_flowchart_image(source: str):
     """Render a Mermaid flowchart to a colour PNG via Graphviz. Returns
     None if graphviz isn't installed, the source isn't a flowchart this
@@ -940,9 +975,8 @@ def render_mermaid_flowchart_image(source: str):
     direction = _flowchart_effective_direction(direction, edges)
 
     dot = _graphviz.Digraph(format="png")
-    # rankdir mirrors the source's own declared direction -- see the module
-    # banner above for why this isn't forced to portrait (and for the one
-    # fan-out exception `_flowchart_effective_direction` applies above).
+    # rankdir starts from the source's own declared direction -- see the
+    # module banner above for when it's flipped instead.
     dot.attr(rankdir=direction, bgcolor="white", nodesep="0.35", ranksep="0.45", dpi=_MERMAID_DPI)
     dot.attr("node", fontname="Helvetica", fontsize="14", fontcolor=_MERMAID_TEXT,
               fillcolor=_MERMAID_FILL, color=_MERMAID_STROKE, penwidth="1.4")
@@ -986,7 +1020,7 @@ def render_mermaid_flowchart_image(source: str):
         dot.edge(src, dst, **edge_kwargs)
 
     try:
-        return dot.pipe()
+        return _pipe_kindle_orientation(dot, direction)
     except Exception:
         return None
 
@@ -1117,7 +1151,7 @@ def render_mermaid_state_image(source: str):
         dot.edge(src, dst, **edge_kwargs)
 
     try:
-        return dot.pipe()
+        return _pipe_kindle_orientation(dot, direction)
     except Exception:
         return None
 

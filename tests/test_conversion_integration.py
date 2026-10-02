@@ -151,6 +151,29 @@ class FlowchartSubgraphAndInlineLabelTests(unittest.TestCase):
         self.assertIsNotNone(mtk.render_mermaid_flowchart_image(self.SOURCE))
 
 
+@unittest.skipIf(mtk._graphviz is None, "graphviz not installed")
+class KindleOrientationFlipTests(unittest.TestCase):
+    """`_pipe_kindle_orientation` flips a rendered long strip to the other
+    axis when that shows the text meaningfully larger on a Kindle page."""
+
+    @staticmethod
+    def _size(png):
+        from PIL import Image
+        import io
+        return Image.open(io.BytesIO(png)).size
+
+    def test_long_lr_chain_flipped_to_vertical(self):
+        source = "flowchart LR\n" + "\n".join(
+            f"    N{i}[Step number {i} label] --> N{i + 1}[Step number {i + 1} label]" for i in range(6)
+        )
+        width, height = self._size(mtk.render_mermaid_flowchart_image(source))
+        self.assertGreater(height, width)
+
+    def test_short_lr_diagram_keeps_declared_direction(self):
+        width, height = self._size(mtk.render_mermaid_flowchart_image("flowchart LR\n    A[Start] --> B[End]"))
+        self.assertGreater(width, height)
+
+
 class ConversionIntegrationTests(unittest.TestCase):
     def test_ordered_lists_and_timestamp_render_correctly(self):
         with tempfile.TemporaryDirectory() as tmp:
