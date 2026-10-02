@@ -51,6 +51,24 @@ class PdfGlyphFallbackTests(unittest.TestCase):
         markup = mtk._pdf_text_markup("Extract ✓", mtk._PDF_MONO_FONT_NAME)
         self.assertIn('<font face="Helvetica">✓</font>', markup)
 
+    @unittest.skipUnless(HAS_EMOJI_FONT, "Apple Color Emoji not installed")
+    def test_emoji_in_fenced_code_block_becomes_inline_image(self):
+        from reportlab.platypus import XPreformatted
+        soup = BeautifulSoup("<pre><code>├── COURSE.md  # ✅ CREATED\n</code></pre>",
+                             "html.parser")
+        renderer = mtk.PdfRenderer(mtk.build_pdf_styles(), mtk.ImageRegistry())
+        cell = renderer.render_code_block(soup.pre)._cellvalues[0][0]
+        self.assertIsInstance(cell, XPreformatted)
+        self.assertIn("<img ", cell.text)
+        self.assertIn("COURSE.md  # ", cell.text)  # whitespace preserved
+
+    def test_plain_fenced_code_block_stays_preformatted(self):
+        from reportlab.platypus import Preformatted
+        soup = BeautifulSoup("<pre><code>a  →  b\n</code></pre>", "html.parser")
+        renderer = mtk.PdfRenderer(mtk.build_pdf_styles(), mtk.ImageRegistry())
+        cell = renderer.render_code_block(soup.pre)._cellvalues[0][0]
+        self.assertIsInstance(cell, Preformatted)
+
 
 class PdfListCodeBlockTests(unittest.TestCase):
     def test_fenced_code_in_list_item_is_a_real_code_block(self):

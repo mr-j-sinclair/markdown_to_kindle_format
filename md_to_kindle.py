@@ -74,6 +74,7 @@ from reportlab.platypus import (
     Table as _PdfTable,
     TableStyle as _PdfTableStyle,
     Preformatted as _PdfPreformatted,
+    XPreformatted as _PdfXPreformatted,
     HRFlowable as _PdfHRFlowable,
     Image as _PdfImage,
     Indenter as _PdfIndenter,
@@ -3139,7 +3140,8 @@ _PDF_MONO_FONT_NAME = _register_pdf_mono_font()
 # emoji font is absent, text is left as before.
 # ROLLBACK: delete this block, tests/test_pdf_rendering.py (glyph tests), and in
 # _pdf_walk_inline() restore escape_x() for the two `_pdf_text_markup(...)`
-# calls and the fixed backColor on inline code.
+# calls and the fixed backColor on inline code; in render_code_block() keep
+# only the plain _PdfPreformatted branch.
 # ---------------------------------------------------------------------
 _PDF_EMOJI_FONT_PATH = "/System/Library/Fonts/Apple Color Emoji.ttc"
 _PDF_EMOJI_STRIKE = 160  # a bitmap size the sbix emoji font actually ships
@@ -3189,7 +3191,8 @@ def _pdf_glyph_image_path(ch: str):
     return path
 
 
-def _pdf_text_markup(text: str, font_name: str = "Helvetica") -> str:
+def _pdf_text_markup(text: str, font_name: str = "Helvetica",
+                     img_pt: float = _PDF_GLYPH_IMG_PT) -> str:
     """escape_x(text), except characters `font_name` can't draw become
     inline emoji images (see the glyph-fallback note above)."""
     if all(ord(c) < 0x2000 for c in text):
@@ -3204,8 +3207,8 @@ def _pdf_text_markup(text: str, font_name: str = "Helvetica") -> str:
             if path:
                 out.append(escape_x("".join(run)))
                 run = []
-                out.append(f'<img src="{escape_x(path)}" width="{_PDF_GLYPH_IMG_PT}" '
-                           f'height="{_PDF_GLYPH_IMG_PT}" valign="-1.5"/>')
+                out.append(f'<img src="{escape_x(path)}" width="{img_pt}" '
+                           f'height="{img_pt}" valign="-1.5"/>')
                 continue
             if font_name != "Helvetica" and _pdf_font_has_char("Helvetica", ch):
                 # e.g. ✓: not in the emoji font, but Helvetica's ZapfDingbats
@@ -3500,7 +3503,14 @@ class PdfRenderer:
     def render_code_block(self, tag):
         code_tag = tag.find("code") if tag.name == "pre" else tag
         text = (code_tag.get_text() if code_tag is not None else tag.get_text()).rstrip("\n")
-        pre = _PdfPreformatted(text, self.styles["PdfCodeBlock"], maxLineLength=250)
+        style = self.styles["PdfCodeBlock"]
+        markup = _pdf_text_markup(text, style.fontName, img_pt=style.fontSize)
+        if markup == escape_x(text):
+            pre = _PdfPreformatted(text, style, maxLineLength=250)
+        else:
+            # Glyph fallback (e.g. ✅ in a file tree): plain Preformatted
+            # can't hold inline images, so use its markup-aware variant.
+            pre = _PdfXPreformatted(markup, style)
         wrapper = _PdfTable([[pre]], colWidths=[self.content_width])
         wrapper.setStyle(_PdfTableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), _PDF_CODE_BG),
