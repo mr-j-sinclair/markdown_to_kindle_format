@@ -121,6 +121,36 @@ class FlowchartEffectiveDirectionTests(unittest.TestCase):
         self.assertEqual(mtk._flowchart_effective_direction(direction, edges), "LR")
 
 
+class FlowchartSubgraphAndInlineLabelTests(unittest.TestCase):
+    """Gemini-style flowcharts: titled subgraphs and `A -- text --> B`
+    edge labels."""
+
+    SOURCE = """graph TD
+    subgraph "Typical LLM Pipeline (System 2)"
+        A1[Input] -->|Autoregressive| B1(Token)
+    end
+    subgraph jev [Jev Pipeline]
+        A2[Input State] --> B2
+    end
+    B2 -- Iterative Training --> B2
+    endNode[Done]
+"""
+
+    def test_subgraph_membership_and_titles(self):
+        _, nodes, _ = mtk.parse_mermaid_flowchart(self.SOURCE)
+        self.assertEqual([t for _, t in nodes["A1"]["subgraph"]], ["Typical LLM Pipeline (System 2)"])
+        self.assertEqual([t for _, t in nodes["B2"]["subgraph"]], ["Jev Pipeline"])
+        self.assertEqual(nodes["endNode"]["subgraph"], ())
+
+    def test_inline_edge_label(self):
+        _, _, edges = mtk.parse_mermaid_flowchart(self.SOURCE)
+        self.assertIn(("B2", "B2", "Iterative Training", "solid", False), edges)
+
+    @unittest.skipIf(mtk._graphviz is None, "graphviz not installed")
+    def test_subgraph_renders(self):
+        self.assertIsNotNone(mtk.render_mermaid_flowchart_image(self.SOURCE))
+
+
 class ConversionIntegrationTests(unittest.TestCase):
     def test_ordered_lists_and_timestamp_render_correctly(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -121,5 +121,74 @@ class EnsureBlankLineBeforeBlocksTests(unittest.TestCase):
         self.assertEqual(mtk.ensure_blank_line_before_blocks(text), text)
 
 
+ZW = "​"
+
+
+class StripZeroWidthFenceMarkersTests(unittest.TestCase):
+    def test_gemini_split_fence_rejoined(self):
+        text = f"`{ZW}`{ZW}`mermaid\ngraph LR\n  A --> B\n`{ZW}`{ZW}`\n"
+        expected = "```mermaid\ngraph LR\n  A --> B\n```\n"
+        self.assertEqual(mtk.strip_zero_width_fence_markers(text), expected)
+
+    def test_blockquoted_fence_rejoined(self):
+        text = f"> `{ZW}`{ZW}`mermaid\n> graph LR\n> `{ZW}`{ZW}`\n"
+        expected = "> ```mermaid\n> graph LR\n> ```\n"
+        self.assertEqual(mtk.strip_zero_width_fence_markers(text), expected)
+
+    def test_zero_width_in_prose_left_untouched(self):
+        text = f"word{ZW}joiner and inline `{ZW}code` here\n"
+        self.assertEqual(mtk.strip_zero_width_fence_markers(text), text)
+
+
+class EnsureBlankLinesAroundFencesTests(unittest.TestCase):
+    def test_list_after_closing_fence_separated(self):
+        text = "```\nx\n```\n- a\n- b\n"
+        expected = "```\nx\n```\n\n- a\n- b\n"
+        self.assertEqual(mtk.ensure_blank_lines_around_fences(text), expected)
+
+    def test_blockquoted_fence_keeps_quote_prefix(self):
+        text = "> ```mermaid\n> graph LR\n> ```\n> *   item\n"
+        expected = "> ```mermaid\n> graph LR\n> ```\n>\n> *   item\n"
+        self.assertEqual(mtk.ensure_blank_lines_around_fences(text), expected)
+
+    def test_already_spaced_unchanged(self):
+        text = "Intro\n\n```\nx\n```\n\nAfter\n"
+        self.assertEqual(mtk.ensure_blank_lines_around_fences(text), text)
+
+    def test_fence_after_list_item_separated(self):
+        text = "> *   item\n> ```mermaid\n> graph LR\n> ```\n"
+        expected = "> *   item\n>\n> ```mermaid\n> graph LR\n> ```\n"
+        self.assertEqual(mtk.ensure_blank_lines_around_fences(text), expected)
+
+    def test_fence_inside_list_item_unchanged(self):
+        text = "- a\n  ```\n  x\n  ```\n- b\n"
+        self.assertEqual(mtk.ensure_blank_lines_around_fences(text), text)
+
+
+class NormalizeNestedListIndentTests(unittest.TestCase):
+    def test_gemini_four_space_children_reindented(self):
+        text = "*   **A:**\n    *   detail\n*   **B:**\n    *   more\n"
+        expected = "*   **A:**\n  *   detail\n*   **B:**\n  *   more\n"
+        self.assertEqual(mtk.normalize_nested_list_indent(text), expected)
+
+    def test_blockquoted_children_reindented(self):
+        text = "> *   **A:**\n>     *   detail\n"
+        expected = "> *   **A:**\n>   *   detail\n"
+        self.assertEqual(mtk.normalize_nested_list_indent(text), expected)
+
+    def test_deeper_descendants_shift_with_parent(self):
+        text = "*   a\n    *   b\n        *   c\n    *   d\n"
+        expected = "*   a\n  *   b\n    *   c\n  *   d\n"
+        self.assertEqual(mtk.normalize_nested_list_indent(text), expected)
+
+    def test_already_nesting_lists_unchanged(self):
+        text = "- a\n  - b\n    - c\n1. x\n   - y\n"
+        self.assertEqual(mtk.normalize_nested_list_indent(text), text)
+
+    def test_fenced_code_block_left_untouched(self):
+        text = "- a\n```\n- a\n    - b\n```\n"
+        self.assertEqual(mtk.normalize_nested_list_indent(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()

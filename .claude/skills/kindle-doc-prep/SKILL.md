@@ -78,7 +78,10 @@ a judgment call you make by hand while preparing the source Markdown:
   - Node IDs: `[A-Za-z_][\w-]*`
   - Shapes: `[rect]`, `{diamond}`, `((circle))`, `(rounded)`
   - Edges: `-->`, `-.->`, `==>`, `<-->`, `<==>`, optionally with
-    `|edge label|`
+    `|edge label|`, or the inline form `A -- label --> B`
+  - `subgraph ID [Title]` / `subgraph "Title"` ... `end` (drawn as a
+    titled box; may nest)
+  - `graph` is accepted as a synonym for `flowchart`
 - Keep node labels short; put detailed prose in adjacent regular bullets
   rather than cramming it into the diagram itself.
 - Whenever authoring or replacing a diagram, use a separate sub-agent to

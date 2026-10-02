@@ -709,10 +709,21 @@ _MERMAID_DOTTED_LABEL_EDGE_RE = re.compile(
     rf"-\.\s*([^.]*?)\s*\.->\s*"
     rf"({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?\s*$"
 )
+# Mermaid's other edge-label form, with the text inside the arrow itself:
+# `A -- some text --> B` / `A == some text ==> B`.
+_MERMAID_INLINE_LABEL_EDGE_RE = re.compile(
+    rf"^({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?\s*"
+    rf"(--|==)\s+(.+?)\s+(-->|==>)\s*"
+    rf"({_MERMAID_NODE_ID})\s*({_MERMAID_SHAPE})?\s*$"
+)
+# `subgraph ID [Title]`, `subgraph "Title"`, or `subgraph Title words`.
+_MERMAID_SUBGRAPH_RE = re.compile(
+    r'^subgraph\s+(?:([A-Za-z_][\w-]*)\s*\[([^\]]*)\]|"([^"]*)"|(.+?))\s*$', re.IGNORECASE
+)
 # Directives this parser deliberately doesn't understand but shouldn't choke
 # on either -- lines starting with these are silently skipped rather than
 # aborting the whole diagram's parse.
-_MERMAID_DIRECTIVE_PREFIXES = ("subgraph", "end", "classdef", "class ", "style ", "click ", "%%", "linkstyle")
+_MERMAID_DIRECTIVE_PREFIXES = ("classdef", "class ", "style ", "click ", "%%", "linkstyle", "direction ")
 
 # Colours chosen to match Mermaid's own "default" theme (the one GitHub
 # renders ```mermaid fences with): light lavender fill, purple stroke,
@@ -830,12 +841,19 @@ def parse_mermaid_flowchart(source: str):
     document using a directive this parser doesn't model (`classDef`,
     `style`, ...) still renders everything else."""
     direction = "TB"
-    nodes = {}  # node_id -> {"label": str|None, "shape": str|None}
-    edges = []  # (src_id, dst_id, label|None, "solid"|"dashed")
+    # node_id -> {"label": str|None, "shape": str|None, "subgraph": path},
+    # where path is a tuple of (subgraph_id, title) from outermost to
+    # innermost -- the subgraph(s) the node was first mentioned in, which
+    # is how Mermaid itself assigns membership.
+    nodes = {}
+    edges = []  # (src_id, dst_id, label|None, "solid"|"dashed", bidirectional)
     saw_header = False
+    subgraph_stack = []
+    subgraph_count = 0
 
     def ensure_node(node_id, shape_token):
-        info = nodes.setdefault(node_id, {"label": None, "shape": None})
+        info = nodes.setdefault(node_id, {"label": None, "shape": None,
+                                          "subgraph": tuple(subgraph_stack)})
         if shape_token:
             kind, label = _mermaid_shape_kind_and_label(shape_token)
             info["shape"] = kind
@@ -854,6 +872,25 @@ def parse_mermaid_flowchart(source: str):
             direction = "TB" if dir_token == "TD" else dir_token
             continue
         if line.lower().startswith(_MERMAID_DIRECTIVE_PREFIXES):
+            continue
+        m = _MERMAID_SUBGRAPH_RE.match(line)
+        if m:
+            sg_id, bracket_title, quoted_title, bare = m.groups()
+            title = bracket_title or quoted_title or bare or sg_id
+            subgraph_count += 1
+            subgraph_stack.append((f"sg{subgraph_count}", _mermaid_clean_label(title)))
+            continue
+        if line.lower() == "end":
+            if subgraph_stack:
+                subgraph_stack.pop()
+            continue
+
+        m = _MERMAID_INLINE_LABEL_EDGE_RE.match(line)
+        if m:
+            src_id, src_shape, _, label, arrow, dst_id, dst_shape = m.groups()
+            ensure_node(src_id, src_shape)
+            ensure_node(dst_id, dst_shape)
+            edges.append((src_id, dst_id, _mermaid_clean_label(label) or None, "solid", False))
             continue
 
         m = _MERMAID_DOTTED_LABEL_EDGE_RE.match(line)
@@ -912,10 +949,31 @@ def render_mermaid_flowchart_image(source: str):
     dot.attr("edge", fontname="Helvetica", fontsize="12", fontcolor=_MERMAID_TEXT,
               color=_MERMAID_EDGE_COLOR, penwidth="1.2", arrowsize="0.8")
 
+    # Subgraphs become Graphviz "cluster_*" subgraphs (the name prefix is
+    # what makes dot draw a labelled box around them), nested to match the
+    # Mermaid source.
+    cluster_tree = {}  # path prefix -> list of node_ids directly inside it
     for node_id, info in nodes.items():
-        label = info["label"] or node_id
-        shape, style = _MERMAID_SHAPE_STYLE.get(info["shape"], _MERMAID_SHAPE_STYLE[None])
-        dot.node(node_id, label=label, shape=shape, style=style)
+        path = info.get("subgraph", ())
+        for depth in range(len(path) + 1):
+            cluster_tree.setdefault(path[:depth], [])
+        cluster_tree[path].append(node_id)
+
+    def add_nodes(graph, path):
+        for node_id in cluster_tree.get(path, []):
+            info = nodes[node_id]
+            label = info["label"] or node_id
+            shape, style = _MERMAID_SHAPE_STYLE.get(info["shape"], _MERMAID_SHAPE_STYLE[None])
+            graph.node(node_id, label=label, shape=shape, style=style)
+        children = [p for p in cluster_tree if len(p) == len(path) + 1 and p[:len(path)] == path]
+        for child in children:
+            sg_id, title = child[-1]
+            with graph.subgraph(name=f"cluster_{sg_id}") as sub:
+                sub.attr(label=title or "", style="rounded", color=_MERMAID_STROKE,
+                         fontname="Helvetica", fontsize="14", fontcolor=_MERMAID_TEXT)
+                add_nodes(sub, child)
+
+    add_nodes(dot, ())
 
     for src, dst, label, style, bidirectional in edges:
         edge_kwargs = {}
@@ -2021,6 +2079,129 @@ _TIMESTAMP_LABEL_RE = re.compile(
 )
 
 
+# Gemini can't render Mermaid in its own UI, so its exporter breaks every
+# code fence by putting a zero-width space between the backticks
+# ("`​`​`mermaid"); python-markdown then sees literal backticks
+# instead of a fence. Only the backtick run at the start of a line (after
+# optional indentation / blockquote ">" markers) is touched, so zero-width
+# characters anywhere in the author's actual text are left alone.
+_ZERO_WIDTH_CHARS = "​‌‍⁠﻿"
+_ZW_FENCE_RE = re.compile(
+    rf"^(?P<lead>[ \t]*(?:>[ \t]*)*)(?P<run>(?:[`~][{_ZERO_WIDTH_CHARS}]+){{2,}}[`~])"
+)
+
+
+def strip_zero_width_fence_markers(text: str) -> str:
+    """Rejoin code fences split by zero-width characters (e.g. Gemini
+    exports) so ```mermaid and other fenced blocks are parsed as code."""
+    def _replace(m):
+        run = m.group("run")
+        stripped = run.translate({ord(c): None for c in _ZERO_WIDTH_CHARS})
+        if len(set(stripped)) != 1:
+            return m.group(0)  # mixed ` and ~ -- not a fence marker
+        return m.group("lead") + stripped
+    return "\n".join(_ZW_FENCE_RE.sub(_replace, line, count=1) for line in text.split("\n"))
+
+
+_QUOTED_FENCE_RE = re.compile(r"^(?P<lead>[ \t]*(?:>[ \t]*)*)(?P<fence>`{3,}|~{3,})")
+
+
+def _is_indented_lead(lead):
+    """True when a fence's leading whitespace (after any ">" quote markers)
+    puts it inside a list item rather than at its container's margin."""
+    return re.search(r"(^|>)[ \t]{2,}$", lead) is not None
+
+
+def ensure_blank_lines_around_fences(text: str) -> str:
+    """Insert a blank line before an opening fence / after a closing fence
+    that's butted up against other content (Gemini does this inside "> "
+    thinking blocks). Without it python-markdown's lazy continuation pulls
+    a fence into the preceding list item, and swallows a following list
+    into the code block's paragraph. The blank line keeps the fence's own
+    blockquote prefix so the quote isn't split. Indented fences (inside
+    list items) are skipped: a blank line there would turn a tight list
+    loose."""
+    lines = text.split("\n")
+    out = []
+    open_fence = None
+    for i, line in enumerate(lines):
+        m = _QUOTED_FENCE_RE.match(line)
+        if m and open_fence is None:
+            lead = m.group("lead")
+            prev = out[-1] if out else ""
+            if prev.strip().strip(">").strip() and not _is_indented_lead(lead):
+                out.append(lead.rstrip())
+        out.append(line)
+        if not m:
+            continue
+        fence = m.group("fence")
+        if open_fence is None:
+            open_fence = fence
+            continue
+        if fence[0] != open_fence[0] or len(fence) < len(open_fence) or line[m.end():].strip():
+            continue  # not a valid closing fence for the open block
+        open_fence = None
+        lead = m.group("lead")
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if nxt.strip().strip(">").strip() and not _is_indented_lead(lead):
+            out.append(lead.rstrip())
+    return "\n".join(out)
+
+
+_NESTED_LIST_LINE_RE = re.compile(r"^(?P<quote>(?:(?:[ \t]*>)+[ \t]?)?)(?P<indent> *)(?P<rest>(?:[-*+]|\d+[.)])[ \t].*)$")
+
+
+def normalize_nested_list_indent(text: str) -> str:
+    """Re-indent nested list items written 4+ spaces deeper than their
+    parent -- Gemini's `*   item` style nests children at column 4 -- to 2
+    spaces deeper. load_markdown() parses with tab_length=2, under which a
+    relative indent of 2-3 nests but 4+ is folded into the parent item's
+    text. Items already nesting correctly keep their indent; deeper
+    descendants shift by the same amount as their re-indented parent."""
+    lines = text.split("\n")
+    out = []
+    stack = []  # (original_indent, new_indent) per open list level
+    quote = None
+    open_fence = None
+    for line in lines:
+        fm = _QUOTED_FENCE_RE.match(line)
+        if fm:
+            fence = fm.group("fence")
+            if open_fence is None:
+                open_fence = fence
+            elif fence[0] == open_fence[0] and len(fence) >= len(open_fence) and not line[fm.end():].strip():
+                open_fence = None
+            out.append(line)
+            continue
+        if open_fence is not None:
+            out.append(line)
+            continue
+        m = _NESTED_LIST_LINE_RE.match(line)
+        if not m:
+            # Unindented prose ends any open list.
+            stripped_quote = re.sub(r"^(?:(?:[ \t]*>)+[ \t]?)?", "", line)
+            if stripped_quote.strip() and not stripped_quote.startswith(" "):
+                stack = []
+            out.append(line)
+            continue
+        if m.group("quote").replace(" ", "") != quote:
+            stack, quote = [], m.group("quote").replace(" ", "")
+        indent = len(m.group("indent"))
+        while stack and stack[-1][0] > indent:
+            stack.pop()
+        if stack and stack[-1][0] == indent:
+            new_indent = stack.pop()[1]
+        elif stack:
+            parent_orig, parent_new = stack[-1]
+            rel = indent - parent_orig
+            new_indent = parent_new + (rel if rel < 4 else 2)
+        else:
+            new_indent = indent
+        stack.append((indent, new_indent))
+        out.append(m.group("quote") + " " * new_indent + m.group("rest"))
+    return "\n".join(out)
+
+
 def normalize_export_timestamps(text: str) -> str:
     """Rewrite '**Created:** 8/31/2026 9:44:08' (and Updated/Exported)
     header lines -- the timestamp block emitted by the user's chat-export
@@ -2096,6 +2277,10 @@ def insert_metadata_line_breaks(text: str) -> str:
 def load_markdown(path: str):
     text = read_file(path)
     text = strip_yaml_frontmatter(text)
+    # First, so every fence-masked normalizer below sees the real fences.
+    text = strip_zero_width_fence_markers(text)
+    text = ensure_blank_lines_around_fences(text)
+    text = normalize_nested_list_indent(text)
     text = normalize_export_timestamps(text)
     text = insert_metadata_line_breaks(text)
     text = normalize_paren_ordered_lists(text)
