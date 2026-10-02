@@ -3136,8 +3136,9 @@ _PDF_MONO_FONT_NAME = _register_pdf_mono_font()
 # the character in inline code. Instead, each such character is rasterized
 # from macOS's Apple Color Emoji via Pillow and embedded as a small inline
 # <img>. Characters the emoji font also lacks (e.g. ✓ in inline code) are
-# switched to Helvetica when its substitution fonts cover them. If the
-# emoji font is absent, text is left as before.
+# switched to Helvetica when its substitution fonts cover them, and failing
+# that to Arial Unicode (e.g. ‖, non-breaking hyphen ‑, ► ◄ in a mono
+# diagram). If none of these fonts is present, text is left as before.
 # ROLLBACK: delete this block, tests/test_pdf_rendering.py (glyph tests), and in
 # _pdf_walk_inline() restore escape_x() for the two `_pdf_text_markup(...)`
 # calls and the fixed backColor on inline code; in render_code_block() keep
@@ -3149,6 +3150,21 @@ _PDF_GLYPH_IMG_PT = 9.0
 _PDF_VARIATION_SELECTORS = {"︎", "️"}
 _pdf_glyph_img_cache = {}  # char -> PNG path, or None if not renderable
 _pdf_glyph_img_dir = None
+_PDF_UNICODE_FALLBACK_FONT_PATH = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
+
+
+def _register_pdf_unicode_fallback_font():
+    if os.path.exists(_PDF_UNICODE_FALLBACK_FONT_PATH):
+        try:
+            _pdf_metrics.registerFont(_PdfTTFont("PdfUnicodeFallback",
+                                                 _PDF_UNICODE_FALLBACK_FONT_PATH))
+            return "PdfUnicodeFallback"
+        except Exception:
+            pass
+    return None
+
+
+_PDF_UNICODE_FALLBACK_FONT_NAME = _register_pdf_unicode_fallback_font()
 
 
 def _pdf_font_has_char(font_name: str, ch: str) -> bool:
@@ -3216,6 +3232,13 @@ def _pdf_text_markup(text: str, font_name: str = "Helvetica",
                 out.append(escape_x("".join(run)))
                 run = []
                 out.append(f'<font face="Helvetica">{escape_x(ch)}</font>')
+                continue
+            if (_PDF_UNICODE_FALLBACK_FONT_NAME
+                    and _pdf_font_has_char(_PDF_UNICODE_FALLBACK_FONT_NAME, ch)):
+                out.append(escape_x("".join(run)))
+                run = []
+                out.append(f'<font face="{_PDF_UNICODE_FALLBACK_FONT_NAME}">'
+                           f'{escape_x(ch)}</font>')
                 continue
         run.append(ch)
     out.append(escape_x("".join(run)))

@@ -51,6 +51,16 @@ class PdfGlyphFallbackTests(unittest.TestCase):
         markup = mtk._pdf_text_markup("Extract ✓", mtk._PDF_MONO_FONT_NAME)
         self.assertIn('<font face="Helvetica">✓</font>', markup)
 
+    @unittest.skipUnless(mtk._PDF_UNICODE_FALLBACK_FONT_NAME, "Arial Unicode not installed")
+    def test_chars_no_other_font_covers_use_unicode_fallback_font(self):
+        face = f'<font face="{mtk._PDF_UNICODE_FALLBACK_FONT_NAME}">'
+        body = mtk._pdf_text_markup("‖a−b‖² on 2026‑09‑15")
+        self.assertEqual(body.count(face), 4)  # ‖ ‖ ‑ ‑
+        code = mtk._pdf_text_markup("Ch0 ─► Ch1 ◄┘", mtk._PDF_MONO_FONT_NAME)
+        if not mtk._pdf_font_has_char(mtk._PDF_MONO_FONT_NAME, "►"):
+            self.assertIn(face + "►</font>", code)
+            self.assertIn(face + "◄</font>", code)
+
     @unittest.skipUnless(HAS_EMOJI_FONT, "Apple Color Emoji not installed")
     def test_emoji_in_fenced_code_block_becomes_inline_image(self):
         from reportlab.platypus import XPreformatted
