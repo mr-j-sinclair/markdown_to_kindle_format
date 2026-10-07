@@ -25,7 +25,7 @@ For a church Order of Service / notices email, also invoke the `order-of-service
 
 ## Verification
 
-- `tests/` holds automated regression tests for `load_markdown()`'s deterministic normalizers (export timestamps, ordered lists, blank-line spacing, metadata line breaks) plus one end-to-end conversion check; run via `.venv/bin/python3 -m unittest discover -s tests` after changing any preprocessing helper. Visual/legibility checks (rendered EPUB appearance, Kindle readability, Mermaid image quality) remain manual.
+- `tests/` holds automated regression tests for `load_markdown()`'s deterministic normalizers (export timestamps, ordered lists, blank-line spacing, metadata line breaks) plus end-to-end conversion checks, including Kindle rendering safety (text diagrams → images, emoji/status symbols → text or inline images, no auto title page); run via `.venv/bin/python3 -m unittest discover -s tests` after changing any preprocessing helper. Visual/legibility checks (rendered EPUB appearance, Kindle readability, Mermaid image quality) remain manual.
 - After changing `load_markdown()` or a preprocessing helper, also reconvert representative real inputs covering: ordinary `1.` ordered lists, `Created`/`Updated`/`Exported` chat timestamps, and Mermaid diagrams — inspect the generated EPUB XHTML by unzipping it rather than relying only on visual appearance.
 - For label/detail bullets, verify real nested `<ul><li>` output.
 - For chat exports, inspect rendered Question/Prompt boxes for intact line separation.

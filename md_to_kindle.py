@@ -1596,6 +1596,262 @@ def resolve_mermaid_diagrams(soup, image_registry, enabled=True):
 
 
 # =====================================================================
+# ASCII / box-drawing text diagrams -> images.
+#
+# A plain-text diagram in an untagged or ```text fence is shown on Kindle
+# as a <pre> that wraps (white-space: pre-wrap) once it's wider than the
+# screen, which shears every box and connector apart; Kindle's fonts also
+# lack many box-drawing/triangle glyphs. Hand-converting each one to
+# Mermaid (kindle-doc-prep's six-line rule) is a manual step that can be
+# skipped, so the converter now rasterizes any such diagram itself: the
+# author's exact characters drawn on a fixed monospace grid, so alignment
+# survives and the text is unchanged. A diagram already hand-converted
+# to ```mermaid never reaches this (resolve_mermaid_diagrams runs first).
+# Fences tagged with a real language (```python, ```json, ...) are code,
+# never diagrams, and are left alone.
+# =====================================================================
+
+_DIAGRAM_FENCE_LANGS = {"text", "txt", "plaintext", "plain", "ascii", "diagram"}
+# Box drawing, block elements, geometric shapes (▲ ▼ ► ◄), arrows.
+_DIAGRAM_GLYPH_RE = re.compile(r"[─-◿←-⇿]")
+# Box-drawing/block/geometric glyphs Kindle fonts may not have: a diagram
+# using any of these becomes an image even when it's small. (Plain arrows
+# such as → ↓ are in Kindle's fonts, so they alone don't force an image.)
+_KINDLE_UNSAFE_DIAGRAM_GLYPH_RE = re.compile(r"[\u2500-\u25FF]")
+_ASCII_CONNECTOR_RE = re.compile(r"-->|<--|->|<-|==>|=>|\+-{2,}|-{2,}\+")
+# A line that is nothing but connector strokes, e.g. "   |", "  v", "↓".
+_CONNECTOR_ONLY_LINE_RE = re.compile(r"^[\s|│┃v^↓↑▼▲+\-─=]+$")
+# Diagrams at most this tall and narrow stay as text (still legible).
+_DIAGRAM_MAX_TEXT_LINES = 6
+_DIAGRAM_MAX_TEXT_COLS = 40
+_DIAGRAM_FONT_PX = 34
+_DIAGRAM_MONO_FONTS = [
+    ("/System/Library/Fonts/Menlo.ttc", 0),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 0),
+    ("/System/Library/Fonts/Monaco.ttf", 0),
+]
+_DIAGRAM_FALLBACK_FONTS = [
+    ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", 0),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0),
+]
+
+
+def is_text_diagram(text: str) -> bool:
+    """True when a plain-text fence is diagram art rather than prose/output:
+    it uses box-drawing/arrow glyphs, or has at least two lines of ASCII
+    connectors ("-->", "+---", a bare "|" or "v" line)."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    if any(_DIAGRAM_GLYPH_RE.search(line) for line in lines):
+        return True
+    connector_lines = sum(
+        1 for line in lines
+        if _ASCII_CONNECTOR_RE.search(line) or _CONNECTOR_ONLY_LINE_RE.match(line)
+    )
+    return connector_lines >= 2
+
+
+def _load_font_with_cmap(candidates, size):
+    from fontTools.ttLib import TTFont
+    from PIL import ImageFont
+    for path, index in candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            font = ImageFont.truetype(path, size, index=index)
+            cmap = set(TTFont(path, fontNumber=index, lazy=True).getBestCmap())
+            return font, cmap
+        except Exception:
+            continue
+    return None, set()
+
+
+def render_text_diagram_image(text: str):
+    """Draw `text` cell-by-cell on a monospace grid (so a glyph borrowed
+    from a fallback font can't shift the columns after it) and return PNG
+    bytes, or None if no monospace font is available."""
+    from PIL import ImageDraw
+    mono, mono_cmap = _load_font_with_cmap(_DIAGRAM_MONO_FONTS, _DIAGRAM_FONT_PX)
+    if mono is None:
+        return None
+    fallback, fallback_cmap = _load_font_with_cmap(_DIAGRAM_FALLBACK_FONTS, _DIAGRAM_FONT_PX)
+    lines = text.rstrip().splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    lines = [line.rstrip().expandtabs(4) for line in lines]
+    cols = max((len(line) for line in lines), default=0)
+    if not cols:
+        return None
+    cell_w = mono.getlength("M")
+    ascent, descent = mono.getmetrics()
+    line_h = ascent + descent  # box-drawing strokes span exactly this
+    pad = _DIAGRAM_FONT_PX // 2
+    img = Image.new("L", (int(cols * cell_w) + 2 * pad, len(lines) * line_h + 2 * pad), 255)
+    draw = ImageDraw.Draw(img)
+    for row, line in enumerate(lines):
+        y = pad + row * line_h
+        for col, ch in enumerate(line):
+            if ch == " ":
+                continue
+            x = pad + col * cell_w
+            code = ord(ch)
+            if code in mono_cmap or fallback is None or code not in fallback_cmap:
+                font = mono
+            else:
+                font = fallback
+            draw.text((x, y), ch, font=font, fill=0)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def resolve_text_diagrams(soup, image_registry):
+    """Replace each diagram-like untagged/```text fence that is taller than
+    _DIAGRAM_MAX_TEXT_LINES, wider than _DIAGRAM_MAX_TEXT_COLS (i.e. would
+    wrap on a Kindle screen), or uses box-drawing glyphs with a rendered
+    image. The image's alt text is
+    the diagram's own text, so nothing is lost for search/accessibility."""
+    for pre in list(soup.find_all("pre")):
+        code = pre.find("code")
+        classes = (code.get("class") if code is not None else None) or []
+        langs = {c[len("language-"):] for c in classes if c.startswith("language-")}
+        if langs and not langs & _DIAGRAM_FENCE_LANGS:
+            continue
+        text = (code or pre).get_text()
+        lines = [line for line in text.rstrip().splitlines()]
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        if not lines or not is_text_diagram(text):
+            continue
+        width = max(len(line.rstrip()) for line in lines)
+        small = len(lines) <= _DIAGRAM_MAX_TEXT_LINES and width <= _DIAGRAM_MAX_TEXT_COLS
+        if small and not _KINDLE_UNSAFE_DIAGRAM_GLYPH_RE.search(text):
+            continue
+        png = render_text_diagram_image(text)
+        if png is None:
+            continue
+        rel_path = image_registry.register(png, media_type="image/png", prefix="diagram")
+        img = soup.new_tag("img")
+        img["src"] = rel_path
+        img["class"] = ["content-img", "text-diagram-img"]
+        img["alt"] = " ".join(text.split())
+        wrapper = soup.new_tag("p")
+        wrapper.append(img)
+        pre.replace_with(wrapper)
+
+
+# =====================================================================
+# Kindle-safe symbols (EPUB only).
+#
+# Kindle's reading fonts have no emoji and only patchy dingbat coverage,
+# so status marks such as ✅ ❌ ⚠️ -- common in comparison tables -- show
+# as blank boxes or nothing at all. Before EPUB assembly each such mark
+# becomes a bracketed plain-text word every Kindle can display. This is a
+# glyph substitution for rendering, not an edit to the author's words;
+# the PDF path keeps the original glyphs (it can draw them). Symbols
+# rendered inside a text-diagram image are already safe and untouched.
+# =====================================================================
+
+_KINDLE_SYMBOL_TEXT = {
+    "✅": "[Yes]", "✔": "[Yes]", "✓": "[Yes]", "☑": "[Yes]", "🟢": "[Yes]",
+    "❌": "[No]", "✖": "[No]", "✗": "[No]", "✘": "[No]", "❎": "[No]", "🚫": "[No]",
+    "🔴": "[No]",
+    "⚠": "[Warning]", "🟡": "[Partial]", "🟠": "[Partial]",
+    "⭐": "*", "★": "*", "☆": "*",
+    "❓": "[?]", "❔": "[?]", "❗": "[!]", "❕": "[!]",
+    "➡": "->", "⬅": "<-", "⬆": "^", "⬇": "v",
+    "💡": "[Tip]", "📌": "[Note]", "📝": "[Note]", "🔥": "[Hot]",
+}
+_EMOJI_VARIATION_SELECTORS_RE = re.compile("[︎️]")
+_KINDLE_SYMBOL_RE = re.compile(
+    "(?:" + "|".join(re.escape(s) for s in sorted(_KINDLE_SYMBOL_TEXT, key=len, reverse=True))
+    + ")[︎️]?"
+)
+
+
+def kindle_safe_symbols(text: str) -> str:
+    """Swap Kindle-unrenderable status symbols for plain-text equivalents,
+    keeping a space between the replacement and an adjoining word."""
+    def repl(m):
+        out = _KINDLE_SYMBOL_TEXT[_EMOJI_VARIATION_SELECTORS_RE.sub("", m.group(0))]
+        end = m.end()
+        if end < len(m.string) and m.string[end].isalnum():
+            out += " "
+        return out
+    return _KINDLE_SYMBOL_RE.sub(repl, text)
+
+
+# Any other emoji (decorative ❤ 🔹 👉 ... in social posts) has no sensible
+# text form, so it becomes a small inline image instead -- Kindle always
+# renders images. A sequence (flag pair, ZWJ family, skin tone) is drawn
+# as one unit. Needs macOS's Apple Color Emoji; elsewhere it's left as is.
+_EMOJI_CHAR = "[\u2600-\u27BF\u2B00-\u2BFF\U0001F000-\U0001FAFF]"
+_EMOJI_SEQUENCE_RE = re.compile(
+    "[\U0001F1E6-\U0001F1FF]{2}"
+    f"|{_EMOJI_CHAR}[\uFE0E\uFE0F]?[\U0001F3FB-\U0001F3FF]?"
+    f"(?:\u200D{_EMOJI_CHAR}[\uFE0E\uFE0F]?[\U0001F3FB-\U0001F3FF]?)*"
+)
+_epub_emoji_png_cache = {}
+
+
+def _emoji_png(seq: str):
+    if seq not in _epub_emoji_png_cache:
+        png = None
+        if os.path.exists(_PDF_EMOJI_FONT_PATH):
+            try:
+                from PIL import ImageDraw, ImageFont
+                font = ImageFont.truetype(_PDF_EMOJI_FONT_PATH, _PDF_EMOJI_STRIKE)
+                size = int(_PDF_EMOJI_STRIKE * 1.3)
+                img = Image.new("RGBA", (size * max(1, len(seq)), size), (255, 255, 255, 0))
+                ImageDraw.Draw(img).text((0, 0), seq, font=font, embedded_color=True)
+                bbox = img.getbbox()
+                if bbox:
+                    flat = Image.new("RGB", img.size, (255, 255, 255))
+                    flat.paste(img, mask=img.split()[3])
+                    buf = io.BytesIO()
+                    flat.crop(bbox).save(buf, format="PNG", optimize=True)
+                    png = buf.getvalue()
+            except Exception:
+                png = None
+        _epub_emoji_png_cache[seq] = png
+    return _epub_emoji_png_cache[seq]
+
+
+def replace_kindle_unsafe_symbols(soup, image_registry):
+    for node in list(soup.find_all(string=_KINDLE_SYMBOL_RE)):
+        node.replace_with(kindle_safe_symbols(str(node)))
+    emoji_paths = {}  # one image per distinct emoji, however often it's used
+    for node in list(soup.find_all(string=_EMOJI_SEQUENCE_RE)):
+        # Highlighted code is re-rendered from plain text, so an <img>
+        # can't live inside <pre>; leave any emoji there untouched.
+        if node.find_parent("pre") is not None:
+            continue
+        text = str(node)
+        pieces, pos = [], 0
+        for m in _EMOJI_SEQUENCE_RE.finditer(text):
+            png = _emoji_png(m.group(0))
+            if png is None:
+                continue
+            if m.start() > pos:
+                pieces.append(text[pos:m.start()])
+            if m.group(0) not in emoji_paths:
+                emoji_paths[m.group(0)] = image_registry.register(
+                    png, media_type="image/png", prefix="emoji")
+            img = soup.new_tag("img")
+            img["src"] = emoji_paths[m.group(0)]
+            img["class"] = ["emoji-img"]
+            img["alt"] = m.group(0)
+            pieces.append(img)
+            pos = m.end()
+        if not pieces:
+            continue
+        if pos < len(text):
+            pieces.append(text[pos:])
+        node.replace_with(*pieces)
+
+
+# =====================================================================
 # Markdown text preprocessing, copied from the sibling markdown_to_pdf
 # project (md_to_pdf.py) -- unchanged logic, still python-markdown input.
 # =====================================================================
@@ -3003,6 +3259,11 @@ code.inline-code {{
     border: 1px solid #d8dee9;
     border-radius: 4px;
 }}
+img.emoji-img {{
+    height: 1em;
+    width: auto;
+    vertical-align: -0.1em;
+}}
 figure {{ margin: 0.8em 0; }}
 p.figcaption {{
     font-size: 0.85em;
@@ -3055,18 +3316,7 @@ class EpubBuilder:
             media_type="text/css", content=build_css(),
         )
         self.book.add_item(self.css_item)
-        self.title_chapter = None
         self.chapters = []
-
-    def add_title_page(self, title, subtitle=None):
-        parts = [f"<h1>{escape_x(title)}</h1>"]
-        if subtitle:
-            parts.append(f'<p class="subtitle">{escape_x(subtitle)}</p>')
-        c = epub.EpubHtml(uid="titlepage", file_name="titlepage.xhtml", title=title, lang="en")
-        c.content = "".join(parts)
-        c.add_item(self.css_item)
-        self.book.add_item(c)
-        self.title_chapter = c
 
     def add_chapter(self, chapter_title, body_html, index):
         c = epub.EpubHtml(
@@ -3089,9 +3339,9 @@ class EpubBuilder:
         self.book.toc = tuple(epub.Link(c.file_name, c.title, c.id) for c in self.chapters)
         self.book.add_item(epub.EpubNcx())
         self.book.add_item(epub.EpubNav())
-        spine = ["nav"]
-        if self.title_chapter is not None:
-            spine.append(self.title_chapter)
+        # Non-linear: the table of contents stays reachable from the
+        # Kindle "Go To" menu but isn't shown as the book's first page.
+        spine = [("nav", "no")]
         spine.extend(self.chapters)
         self.book.spine = spine
         epub.write_epub(output_path, self.book)
@@ -4069,8 +4319,16 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
     # PROTOTYPE, easy to remove -- see the "Mermaid diagram image
     # rendering" section's ROLLBACK note above resolve_mermaid_diagrams().
     resolve_mermaid_diagrams(soup, image_registry, enabled=mermaid_images)
+    resolve_text_diagrams(soup, image_registry)
 
-    doc_title = title or os.path.splitext(os.path.basename(input_path))[0].replace("_", " ")
+    # Book title: --title, else the document's own leading H1 (so the Kindle
+    # library shows "DSPy and Pydantic & JEV", not "dspy and pydantic and
+    # jev"), else the filename.
+    first_heading = soup.find(["h1", "h2", "h3", "h4", "h5", "h6"])
+    leading_h1 = first_heading if first_heading is not None and first_heading.name == "h1" else None
+    doc_title = (title
+                 or (leading_h1.get_text(strip=True) if leading_h1 is not None else None)
+                 or os.path.splitext(os.path.basename(input_path))[0].replace("_", " "))
 
     out_dir = os.path.dirname(output_path)
     if out_dir:
@@ -4087,8 +4345,22 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
                         created_date=created_date, modified_date=modified_date)
         return
 
+    replace_kindle_unsafe_symbols(soup, image_registry)
+
+    # No separate title page (it showed as an unrequested "cover" before
+    # the content): the book opens on the document's own H1, or on one
+    # added here when the source has none. A --subtitle goes beneath it.
+    if leading_h1 is None:
+        leading_h1 = soup.new_tag("h1")
+        leading_h1.string = doc_title
+        (soup.body or soup).insert(0, leading_h1)
+    if subtitle:
+        sub = soup.new_tag("p")
+        sub["class"] = ["subtitle"]
+        sub.string = subtitle
+        leading_h1.insert_after(sub)
+
     builder = EpubBuilder(title=doc_title, author=author)
-    builder.add_title_page(doc_title, subtitle)
 
     for rel_path, content, media_type in image_registry.images:
         builder.add_image(content, rel_path, media_type)
@@ -4146,7 +4418,7 @@ def build_parser():
                               "is almost always Markdown-shaped)")
     parser.add_argument("--title", help="Book title (default: derived from the input filename)")
     parser.add_argument("--author", help="Author name")
-    parser.add_argument("--subtitle", help="Subtitle shown on the title page")
+    parser.add_argument("--subtitle", help="Subtitle shown beneath the document title")
     parser.add_argument("--footer",
                          help="Free-text override for the PDF footer's left-hand text (overrides "
                               "the default author/subtitle-derived footer). Ignored for EPUB output.")

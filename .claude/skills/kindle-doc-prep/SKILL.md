@@ -72,6 +72,25 @@ a judgment call you make by hand while preparing the source Markdown:
   diagrams that long tend to render illegibly on an e-ink Kindle screen.
 - ASCII diagrams of six lines or fewer may remain in a plain code fence —
   don't convert those unnecessarily.
+- Automatic backstop (software, `resolve_text_diagrams()`): any diagram
+  left in an untagged or ```` ```text ```` fence that is over six lines,
+  over 40 columns, or uses box-drawing glyphs (`┌ ─ │ ├ ▼`) is rendered to
+  a monospace image with the author's exact characters. So a skipped
+  Mermaid conversion is never shown as wrapped, sheared ASCII — but
+  Mermaid is still preferred for flowcharts because it reads larger on
+  e-ink. Keep diagrams in an untagged/`text` fence; a fence tagged with a
+  code language (```` ```python ````) is treated as code and never imaged.
+
+## Symbols (context — fully automated, EPUB only)
+
+- Kindle fonts lack emoji and most dingbats. `replace_kindle_unsafe_symbols()`
+  turns status marks into text (✅ → `[Yes]`, ❌ → `[No]`, ⚠️ →
+  `[Warning]`, …) and any other emoji into a small inline image. Don't
+  hand-edit symbols in the source; extend `_KINDLE_SYMBOL_TEXT` if a new
+  status mark needs a text form.
+- The EPUB has no separate title page and the table of contents isn't the
+  first page; the book opens on the document's own H1 (one is added from
+  the filename/`--title` if the source has none).
 - When authoring a Mermaid flowchart, stay within the subset this repo's
   renderer actually supports:
   - Headers: `flowchart TB|TD|BT|RL|LR`
