@@ -113,8 +113,9 @@ class PdfMarginTests(unittest.TestCase):
             with open(src, "w") as f:
                 f.write("# Title\n\nBody text.\n")
             mtk.convert(src, out, output_format="pdf", margins=margins)
-            from pypdf import PdfReader
-            return PdfReader(out).pages[0].mediabox
+            import pymupdf
+            with pymupdf.open(out) as doc:
+                return doc[0].rect
 
     def test_narrow_preset_is_word_narrow(self):
         m = mtk._PDF_MARGIN_PRESETS["narrow"]
@@ -127,7 +128,7 @@ class PdfMarginTests(unittest.TestCase):
 
     def test_narrow_pdf_builds_on_a4(self):
         box = self._page_box("narrow")
-        self.assertAlmostEqual(float(box.width), mtk._PDF_A4[0], places=0)
+        self.assertAlmostEqual(box.width, mtk._PDF_A4[0], places=0)
 
 
 if __name__ == "__main__":
