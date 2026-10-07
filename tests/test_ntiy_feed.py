@@ -1,13 +1,16 @@
+import datetime
+import io
 import os
 import shutil
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bs4 import BeautifulSoup, NavigableString, Tag
+from PIL import Image
 
 import ntiy_feed as nf
 
@@ -233,9 +236,11 @@ class CommandTests(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp)
         self.state_path = os.path.join(self.tmp, "state", "ntiy_state.json")
-        patcher = patch.object(nf, "INPUT_DIR", os.path.join(self.tmp, "inputs"))
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for name, value in (("INPUT_DIR", os.path.join(self.tmp, "inputs")),
+                            ("prepare_cover", lambda episode, slug: None)):
+            patcher = patch.object(nf, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def seed(self, leave_newest):
         state = nf.load_state(self.state_path)
@@ -303,6 +308,47 @@ class CommandTests(unittest.TestCase):
         nf.save_state(self.state_path, state)
         self.assertEqual(nf.load_state(self.state_path), state)
         self.assertEqual(os.listdir(os.path.dirname(self.state_path)), ["ntiy_state.json"])
+
+
+class CoverBannerTests(unittest.TestCase):
+    def square_art(self, colour=(200, 30, 30)):
+        buf = io.BytesIO()
+        Image.new("RGB", (1563, 1563), colour).save(buf, "PNG")
+        return buf.getvalue()
+
+    def test_banner_is_banner_sized_jpeg_with_art_centred(self):
+        banner = Image.open(io.BytesIO(nf.make_banner(self.square_art())))
+        self.assertEqual(banner.format, "JPEG")
+        self.assertEqual(banner.size, nf.BANNER_SIZE)
+        centre = banner.getpixel((600, 314))
+        self.assertTrue(all(abs(a - b) < 8 for a, b in zip(centre, (200, 30, 30))))
+        # Side fill is the blurred, darkened art, not the art itself.
+        self.assertLess(sum(banner.getpixel((20, 314))), sum(centre))
+
+    def test_prepare_cover_writes_local_banner(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        ep = nf.Episode("g", "t", "", None, "", image_url="https://example.com/a.png")
+        resp = MagicMock()
+        resp.__enter__.return_value.read.return_value = self.square_art()
+        with patch.object(nf, "INPUT_DIR", tmp), patch.object(nf.urllib.request, "urlopen", return_value=resp):
+            self.assertEqual(nf.prepare_cover(ep, "ntiy-day-198-1-john-5"), "ntiy-day-198-1-john-5-cover.jpg")
+        self.assertEqual(Image.open(os.path.join(tmp, "ntiy-day-198-1-john-5-cover.jpg")).size, nf.BANNER_SIZE)
+
+    def test_prepare_cover_failure_falls_back_to_remote_url(self):
+        ep = nf.Episode("g", "1 John 5. Day 198 - x", "https://x/e", datetime.datetime(2026, 10, 6), "",
+                        image_url="https://example.com/a.png")
+        with patch.object(nf.urllib.request, "urlopen", side_effect=OSError("offline")):
+            src = nf.prepare_cover(ep, "slug")
+        self.assertIsNone(src)
+        img = body_of(nf.build_document(ep, src)[2]).find("img")
+        self.assertEqual(img["src"], "https://example.com/a.png")
+
+    def test_local_banner_used_when_given(self):
+        ep = nf.Episode("g", "1 John 5. Day 198 - x", "https://x/e", datetime.datetime(2026, 10, 6), "",
+                        image_url="https://example.com/a.png")
+        img = body_of(nf.build_document(ep, "slug-cover.jpg")[2]).find("img")
+        self.assertEqual(img["src"], "slug-cover.jpg")
 
 
 class RunConverterTests(unittest.TestCase):

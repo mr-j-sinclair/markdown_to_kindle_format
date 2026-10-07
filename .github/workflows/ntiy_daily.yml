@@ -86,6 +86,7 @@ jobs:
           name: ntiy-${{ github.run_id }}
           path: |
             inputs/ntiy-*.html
+            inputs/ntiy-*-cover.jpg
             outputs/ntiy-*.epub
           retention-days: 14
           if-no-files-found: ignore

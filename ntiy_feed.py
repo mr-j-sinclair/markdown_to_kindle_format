@@ -24,6 +24,7 @@ Exit codes for --next: 0 = one episode delivered, 3 = nothing new,
 """
 
 import argparse
+import io
 import datetime
 import email.utils
 import html
@@ -38,6 +39,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
+from PIL import Image, ImageEnhance, ImageFilter
 
 FEED_URL = "https://feed.podbean.com/NewTestamentinaYear/feed.xml"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +47,8 @@ INPUT_DIR = os.path.join(SCRIPT_DIR, "inputs")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 CONVERTER = os.path.join(SCRIPT_DIR, "md_to_kindle.py")
 DEFAULT_MAX_SENDS = 5
+# Same size as Podbean's own episode-page banner (og:image) of the cover art.
+BANNER_SIZE = (1200, 628)
 
 EXIT_DELIVERED = 0
 EXIT_NOTHING_NEW = 3
@@ -280,8 +284,51 @@ def clean_notes(content_html: str, episode_title: str) -> list:
     return out
 
 
-def build_document(episode: Episode) -> tuple:
-    """Return (slug, display_title, html_document) for one episode."""
+def make_banner(image_bytes: bytes) -> bytes:
+    """Recreate Podbean's 1200x628 episode-page banner from the square feed
+    cover art: the art scaled to full height and centred over a blurred,
+    darkened copy of itself. Returns JPEG bytes (~60 KB vs ~1.1 MB PNG)."""
+    width, height = BANNER_SIZE
+    art = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    scale = max(width / art.width, height / art.height)
+    background = art.resize((round(art.width * scale), round(art.height * scale)), Image.LANCZOS)
+    left, top = (background.width - width) // 2, (background.height - height) // 2
+    background = background.crop((left, top, left + width, top + height))
+    background = ImageEnhance.Brightness(background.filter(ImageFilter.GaussianBlur(30))).enhance(0.6)
+    foreground = art.resize((round(art.width * height / art.height), height), Image.LANCZOS)
+    background.paste(foreground, ((width - foreground.width) // 2, 0))
+    out = io.BytesIO()
+    background.save(out, "JPEG", quality=85, optimize=True)
+    return out.getvalue()
+
+
+def prepare_cover(episode: Episode, slug: str):
+    """Download the cover art and save it as an inputs/ banner JPEG beside
+    the episode HTML. Returns its filename (relative to inputs/), or None on
+    any failure -- build_document then falls back to the remote URL, which
+    md_to_kindle.py fetches as-is or replaces with a placeholder note."""
+    if not episode.image_url:
+        return None
+    try:
+        req = urllib.request.Request(episode.image_url,
+                                     headers={"User-Agent": "markdown_to_kindle_format/ntiy_feed"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            banner = make_banner(resp.read())
+    except Exception as e:
+        print(f"warning: could not prepare cover banner ({e}); using the original image URL",
+              file=sys.stderr)
+        return None
+    os.makedirs(INPUT_DIR, exist_ok=True)
+    filename = f"{slug}-cover.jpg"
+    with open(os.path.join(INPUT_DIR, filename), "wb") as f:
+        f.write(banner)
+    return filename
+
+
+def build_document(episode: Episode, image_src: str = None) -> tuple:
+    """Return (slug, display_title, html_document) for one episode.
+    image_src overrides the cover image (e.g. a local banner from
+    prepare_cover); otherwise the feed's image URL is used."""
     slug, display_title = episode_names(episode)
     soup = BeautifulSoup("", "html.parser")
     heading = soup.new_tag("h1")
@@ -294,11 +341,11 @@ def build_document(episode: Episode) -> tuple:
     footer.append(soup.new_tag("br"))
     footer.append(f"Published: {episode.pub_date.day} {episode.pub_date:%B %Y}")
     parts = [heading]
-    if episode.image_url:
-        # Fetched and embedded by md_to_kindle.py's resolve_remote_images,
-        # which falls back to a placeholder note if the download fails.
-        parts.append(soup.new_tag("img", attrs={"src": episode.image_url,
-                                                "alt": "Podcast cover art"}))
+    image_src = image_src or episode.image_url
+    if image_src:
+        # md_to_kindle.py embeds a local file via resolve_local_images, or
+        # fetches a URL via resolve_remote_images (placeholder on failure).
+        parts.append(soup.new_tag("img", attrs={"src": image_src, "alt": "Podcast cover art"}))
     parts += [*clean_notes(episode.content_html, episode.title), footer]
     body = "\n".join(str(p) for p in parts)
     doc = (f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">'
@@ -374,7 +421,8 @@ def cmd_next(episodes, channel, state, state_path, max_sends, dry_run) -> int:
               f"raise --max-sends for one run.", file=sys.stderr)
         return EXIT_FLOOD_GUARD
     episode = unseen[0]
-    slug, display_title, doc = build_document(episode)
+    slug, display_title, doc = build_document(
+        episode, prepare_cover(episode, episode_names(episode)[0]))
     input_path = write_input(slug, doc)
     print(f"{len(unseen)} unseen; processing {episode.title!r} -> {input_path}", flush=True)
     if dry_run:
@@ -406,7 +454,8 @@ def cmd_seed(episodes, state, state_path, leave_newest) -> int:
 
 def cmd_preview(episodes, channel) -> int:
     episode = episodes[-1]
-    slug, display_title, doc = build_document(episode)
+    slug, display_title, doc = build_document(
+        episode, prepare_cover(episode, episode_names(episode)[0]))
     input_path = write_input(slug, doc)
     print(f"Previewing newest episode {episode.title!r} -> {input_path} (no send, no state change)", flush=True)
     return run_converter(input_path, slug, display_title, channel, send=False)
