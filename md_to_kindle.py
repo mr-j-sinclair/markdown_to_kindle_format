@@ -63,7 +63,7 @@ from ebooklib import epub
 import kindle_delivery
 
 from reportlab.lib.pagesizes import LETTER as _PDF_LETTER, A4 as _PDF_A4
-from reportlab.lib.units import inch as _pdf_inch
+from reportlab.lib.units import inch as _pdf_inch, cm as _pdf_cm
 from reportlab.lib import colors as _pdf_colors
 from reportlab.lib.styles import getSampleStyleSheet as _pdf_get_stylesheet, ParagraphStyle as _PdfParagraphStyle
 from reportlab.lib.enums import TA_LEFT as _PDF_TA_LEFT, TA_CENTER as _PDF_TA_CENTER
@@ -3274,6 +3274,19 @@ _PDF_QA_QUESTION_BG = _pdf_colors.HexColor("#eef2fb")
 _PDF_PAGE_MARGIN = 0.75 * _pdf_inch
 _PDF_TOP_MARGIN = 1.0 * _pdf_inch  # extra headroom for the running header
 _PDF_BOTTOM_MARGIN = 0.85 * _pdf_inch
+# --margins presets. Each gives the body margins plus where the running
+# header/footer text and rules sit (distances from the page edge), which
+# must stay inside the top/bottom margins. "narrow" is Word's Narrow
+# preset: 1.27 cm on all four sides, so the header/footer are squeezed
+# into that 1.27 cm band.
+_PDF_MARGIN_PRESETS = {
+    "default": dict(side=_PDF_PAGE_MARGIN, top=_PDF_TOP_MARGIN, bottom=_PDF_BOTTOM_MARGIN,
+                    header_text=0.55 * _pdf_inch, header_rule=0.65 * _pdf_inch,
+                    footer_rule=0.65 * _pdf_inch, footer_text=0.5 * _pdf_inch),
+    "narrow": dict(side=1.27 * _pdf_cm, top=1.27 * _pdf_cm, bottom=1.27 * _pdf_cm,
+                   header_text=0.7 * _pdf_cm, header_rule=0.95 * _pdf_cm,
+                   footer_rule=0.95 * _pdf_cm, footer_text=0.55 * _pdf_cm),
+}
 _PDF_CONTENT_WIDTH = _PDF_LETTER[0] - 2 * _PDF_PAGE_MARGIN
 _PDF_MAX_IMAGE_HEIGHT = 7.3 * _pdf_inch
 
@@ -3948,6 +3961,7 @@ class PdfNumberedCanvas(_pdf_canvas_mod.Canvas):
     header_text = ""
     footer_left_text = ""
     page_size = _PDF_LETTER
+    margins = _PDF_MARGIN_PRESETS["default"]
 
     def __init__(self, *args, **kwargs):
         _pdf_canvas_mod.Canvas.__init__(self, *args, **kwargs)
@@ -3970,31 +3984,34 @@ class PdfNumberedCanvas(_pdf_canvas_mod.Canvas):
         self.saveState()
         self.setFont("Helvetica-Bold", 9)
         self.setFillColor(_PDF_NAVY)
-        self.drawString(_PDF_PAGE_MARGIN, self.page_size[1] - 0.55 * _pdf_inch, self.header_text or "")
+        m = self.margins
+        self.drawString(m["side"], self.page_size[1] - m["header_text"], self.header_text or "")
         self.setStrokeColor(_PDF_RULE_COLOR)
         self.setLineWidth(0.5)
-        self.line(_PDF_PAGE_MARGIN, self.page_size[1] - 0.65 * _pdf_inch,
-                  self.page_size[0] - _PDF_PAGE_MARGIN, self.page_size[1] - 0.65 * _pdf_inch)
+        self.line(m["side"], self.page_size[1] - m["header_rule"],
+                  self.page_size[0] - m["side"], self.page_size[1] - m["header_rule"])
         self.restoreState()
 
     def _draw_footer(self, page_count):
         self.saveState()
         self.setStrokeColor(_PDF_RULE_COLOR)
         self.setLineWidth(0.5)
-        self.line(_PDF_PAGE_MARGIN, 0.65 * _pdf_inch, self.page_size[0] - _PDF_PAGE_MARGIN, 0.65 * _pdf_inch)
+        m = self.margins
+        self.line(m["side"], m["footer_rule"], self.page_size[0] - m["side"], m["footer_rule"])
         self.setFont("Helvetica", 8)
         self.setFillColor(_PDF_GREY_TEXT)
-        self.drawString(_PDF_PAGE_MARGIN, 0.5 * _pdf_inch, self.footer_left_text)
-        self.drawRightString(self.page_size[0] - _PDF_PAGE_MARGIN, 0.5 * _pdf_inch,
+        self.drawString(m["side"], m["footer_text"], self.footer_left_text)
+        self.drawRightString(self.page_size[0] - m["side"], m["footer_text"],
                               f"Page {self._pageNumber} of {page_count}")
         self.restoreState()
 
 
 def convert_to_pdf(soup, image_registry, output_path, title=None, author=None,
                     subtitle=None, source_filename=None, page_size="a4", footer=None,
-                    created_date=None, modified_date=None):
+                    created_date=None, modified_date=None, margins="default"):
     resolved_page_size = _PDF_A4 if page_size == "a4" else _PDF_LETTER
-    content_width = resolved_page_size[0] - 2 * _PDF_PAGE_MARGIN
+    m = _PDF_MARGIN_PRESETS[margins]
+    content_width = resolved_page_size[0] - 2 * m["side"]
 
     styles = build_pdf_styles()
     renderer = PdfRenderer(styles, image_registry, content_width=content_width)
@@ -4006,14 +4023,15 @@ def convert_to_pdf(soup, image_registry, output_path, title=None, author=None,
         header_bits.append(f"Author: {author}")
     PdfNumberedCanvas.header_text = " · ".join(b for b in header_bits if b)
     PdfNumberedCanvas.page_size = resolved_page_size
+    PdfNumberedCanvas.margins = m
 
     doc = _PdfSimpleDocTemplate(
         output_path,
         pagesize=resolved_page_size,
-        leftMargin=_PDF_PAGE_MARGIN,
-        rightMargin=_PDF_PAGE_MARGIN,
-        topMargin=_PDF_TOP_MARGIN,
-        bottomMargin=_PDF_BOTTOM_MARGIN,
+        leftMargin=m["side"],
+        rightMargin=m["side"],
+        topMargin=m["top"],
+        bottomMargin=m["bottom"],
         title=title or (source_filename or ""),
     )
     doc.build(story, canvasmaker=PdfNumberedCanvas)
@@ -4035,7 +4053,7 @@ _LOADERS.update({ext: load_image_file for ext in IMAGE_MEDIA_TYPES})
 
 
 def convert(input_path, output_path, title=None, author=None, subtitle=None, mermaid_images=True,
-            output_format="epub", page_size="a4", footer=None):
+            output_format="epub", page_size="a4", footer=None, margins="default"):
     ext = os.path.splitext(input_path)[1].lower()
     loader = _LOADERS.get(ext)
     if loader is None:
@@ -4065,7 +4083,7 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
         modified_date = datetime.datetime.fromtimestamp(_stat.st_mtime).strftime("%Y-%m-%d")
         convert_to_pdf(soup, image_registry, output_path, title=doc_title, author=author,
                         subtitle=subtitle, source_filename=os.path.basename(input_path),
-                        page_size=page_size, footer=footer,
+                        page_size=page_size, footer=footer, margins=margins,
                         created_date=created_date, modified_date=modified_date)
         return
 
@@ -4144,6 +4162,9 @@ def build_parser():
                               "--paste content is interpreted.)")
     parser.add_argument("--page-size", choices=["letter", "a4"], default="a4",
                          help="PDF page size (default: a4). Ignored for EPUB output.")
+    parser.add_argument("--margins", choices=["default", "narrow"], default="default",
+                         help="PDF page margins: 'default' (1.9 cm sides) or 'narrow' "
+                              "(Word's Narrow preset, 1.27 cm all round). Ignored for EPUB output.")
     parser.add_argument("--mermaid-images", choices=["on", "off"], default="on",
                          help="PROTOTYPE: render ```mermaid fences as colour diagram images via "
                               "Graphviz, keeping the source's own layout direction (default: on). "
@@ -4245,7 +4266,7 @@ def main():
 
     convert(input_path, output_path, title=args.title, author=args.author, subtitle=args.subtitle,
             mermaid_images=(args.mermaid_images == "on"), output_format=output_format,
-            page_size=args.page_size, footer=args.footer)
+            page_size=args.page_size, footer=args.footer, margins=args.margins)
     print(f"Wrote {output_path}")
 
     if kindle_delivery.should_send_to_kindle(args.send_to_kindle, output_format):

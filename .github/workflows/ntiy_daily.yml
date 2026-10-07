@@ -6,8 +6,8 @@ name: NTIY episode notes to Kindle
 
 on:
   schedule:
-    # 02:30, 08:30, 14:30, 20:30 UK time daily (follows BST/GMT); idempotent, so extra polls are harmless
-    - cron: "30 2,8,14,20 * * *"
+    # 03:45, 09:45, 15:45, 21:45 UK time daily (follows BST/GMT); idempotent, so extra polls are harmless
+    - cron: "45 3,9,15,21 * * *"
       timezone: "Europe/London"
   workflow_dispatch:
     inputs:

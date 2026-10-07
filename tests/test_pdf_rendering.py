@@ -105,5 +105,30 @@ class PdfListCodeBlockTests(unittest.TestCase):
         self.assertIn("Check status.", flowables[-1].text)
 
 
+class PdfMarginTests(unittest.TestCase):
+    def _page_box(self, margins):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "doc.md")
+            out = os.path.join(tmp, "doc.pdf")
+            with open(src, "w") as f:
+                f.write("# Title\n\nBody text.\n")
+            mtk.convert(src, out, output_format="pdf", margins=margins)
+            from pypdf import PdfReader
+            return PdfReader(out).pages[0].mediabox
+
+    def test_narrow_preset_is_word_narrow(self):
+        m = mtk._PDF_MARGIN_PRESETS["narrow"]
+        for key in ("side", "top", "bottom"):
+            self.assertAlmostEqual(m[key] / mtk._pdf_cm, 1.27)
+        # Header/footer must sit inside the margin band, not over the body.
+        self.assertLess(m["header_rule"], m["top"])
+        self.assertLess(m["footer_rule"], m["bottom"])
+        self.assertLess(m["header_text"], m["header_rule"])
+
+    def test_narrow_pdf_builds_on_a4(self):
+        box = self._page_box("narrow")
+        self.assertAlmostEqual(float(box.width), mtk._PDF_A4[0], places=0)
+
+
 if __name__ == "__main__":
     unittest.main()
