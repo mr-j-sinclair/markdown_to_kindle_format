@@ -154,14 +154,55 @@ class BuildDocumentTests(unittest.TestCase):
 
     def test_empty_notes_still_produce_document(self):
         _, body = self.build("Revelation 22")
-        self.assertEqual([b.name for b in body.find_all(recursive=False)], ["h1", "p"])
+        self.assertEqual([b.name for b in body.find_all(recursive=False)], ["h1", "img", "p"])
+
+    def test_cover_art_follows_heading(self):
+        for ep in self.episodes:
+            with self.subTest(ep.title):
+                body = body_of(nf.build_document(ep)[2])
+                img = body.find("h1").find_next_sibling()
+                self.assertEqual(img.name, "img")
+                self.assertTrue(img["src"].startswith("https://pbcdn1.podbean.com/"))
+                self.assertEqual(img["src"], ep.image_url)
+
+    def test_key_verse_wrapped_in_blockquote(self):
+        expected = {
+            "1 John 5": "\"And this is the testimony: God has given us eternal life, and this life is in his Son.\" — 1 John 5:11",
+            "1 John 3": "— 1 John 3:1",
+            "Titus 2": "— Titus 2:11–12",
+            "Luke 4": "\"It is written...\" Luke 4:4",
+            "James 5": "James 5:16",
+            "Bonus Episode": "Hebrews 3:15",
+        }
+        for prefix, tail in expected.items():
+            with self.subTest(prefix):
+                _, body = self.build(prefix)
+                quotes = body.find_all("blockquote")
+                self.assertEqual(len(quotes), 1)
+                self.assertTrue(norm(quotes[0].get_text()).endswith(tail))
+                self.assertEqual([c.name for c in quotes[0].find_all(recursive=False)], ["p"])
+
+    def test_key_verse_emphasis_kept_inside_blockquote(self):
+        _, body = self.build("1 John 5")
+        em = body.find("blockquote").find("em")
+        self.assertEqual(norm(em.get_text()),
+                         "\"And this is the testimony: God has given us eternal life, and this life is in his Son.\"")
+
+    def test_body_paragraphs_not_blockquoted(self):
+        _, body = self.build("1 John 5")
+        for p in body.find_all("p"):
+            if norm(p.get_text()).startswith("First John 5 closes"):
+                self.assertIsNone(p.find_parent("blockquote"))
 
     def assert_semantic_fidelity(self, prefix, label):
         ep, body = self.build(prefix)
         source = source_blocks_after_label(ep.content_html, label)
         self.assertGreater(len(source), 0)
         heading = next(h for h in body.find_all("h2") if h.get_text().startswith(label))
-        output = [b for b in heading.find_next_siblings() if b.name == "p"][:len(source)]
+        output = []
+        for b in heading.find_next_siblings():
+            output += [b] if b.name == "p" else b.find_all("p") if b.name == "blockquote" else []
+        output = output[:len(source)]
         self.assertEqual(len(output), len(source))
         for src, out in zip(source, output):
             # Same visible text, same paragraph order, emphasis retained.

@@ -66,6 +66,11 @@ _BOILERPLATE_RE = re.compile(
     r"^(?:Podcast Homepage|Bible Reading Plan|Contact Sean|(?:Follow )?NTIY (?:on Facebook|Website))\b",
     re.IGNORECASE)
 _SCRIPTURE_LINE_RE = re.compile(r"^Today['’]s Scripture:", re.IGNORECASE)
+# The episode's key verse, e.g. `"And this is ..." — 1 John 5:11` or
+# `“Today, if you hear His voice ...” Hebrews 3:15`: a paragraph that opens
+# with a quotation mark and ends with a chapter:verse reference.
+_KEY_VERSE_RE = re.compile(
+    r"^[\"“].+[\"”]\s*(?:[—–-]\s*)?(?:[1-3]\s)?[A-Z][a-z]+\s\d+:\d+(?:[–-]\d+)?\.?$")
 _INLINE_BOILERPLATE_RE = re.compile(
     r"\s(?:Podcast Homepage|Bible Reading Plan|Contact Sean|(?:Follow )?NTIY (?:on Facebook|Website)):")
 
@@ -77,6 +82,7 @@ class Episode:
     link: str
     pub_date: datetime.datetime
     content_html: str
+    image_url: str = ""
 
 
 # ---------- feed ----------
@@ -87,9 +93,16 @@ def fetch_feed(url: str = FEED_URL) -> bytes:
         return resp.read()
 
 
+def _itunes_image(element) -> str:
+    image = element.find("itunes:image", _NS)
+    return image.get("href", "").strip() if image is not None else ""
+
+
 def parse_feed(xml_bytes: bytes):
     """Return (channel_info, episodes oldest->newest)."""
     channel = ET.fromstring(xml_bytes).find("channel")
+    cover = channel.find("itunes:image", _NS)
+    cover_url = cover.get("href", "").strip() if cover is not None else ""
     info = {
         "title": (channel.findtext("title") or "").strip(),
         "author": (channel.findtext("itunes:author", namespaces=_NS) or "").strip(),
@@ -106,6 +119,7 @@ def parse_feed(xml_bytes: bytes):
             link=(item.findtext("link") or "").strip(),
             pub_date=email.utils.parsedate_to_datetime(item.findtext("pubDate")),
             content_html=content,
+            image_url=_itunes_image(item) or cover_url,
         ))
     # Feed order is newest-first; reverse before the stable sort so
     # same-timestamp items keep a sensible oldest-first order.
@@ -257,6 +271,11 @@ def clean_notes(content_html: str, episode_title: str) -> list:
             block = _strip_boilerplate_lines(block, soup)
             if block is None:
                 continue
+            if block.name == "p" and _KEY_VERSE_RE.match(_norm(block.get_text())):
+                # Structural only: the paragraph itself is kept verbatim.
+                quote = soup.new_tag("blockquote")
+                quote.append(block)
+                block = quote
         out.append(block)
     return out
 
@@ -274,7 +293,13 @@ def build_document(episode: Episode) -> tuple:
     footer.append(link)
     footer.append(soup.new_tag("br"))
     footer.append(f"Published: {episode.pub_date.day} {episode.pub_date:%B %Y}")
-    parts = [heading, *clean_notes(episode.content_html, episode.title), footer]
+    parts = [heading]
+    if episode.image_url:
+        # Fetched and embedded by md_to_kindle.py's resolve_remote_images,
+        # which falls back to a placeholder note if the download fails.
+        parts.append(soup.new_tag("img", attrs={"src": episode.image_url,
+                                                "alt": "Podcast cover art"}))
+    parts += [*clean_notes(episode.content_html, episode.title), footer]
     body = "\n".join(str(p) for p in parts)
     doc = (f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">'
            f'<title>{html.escape(display_title)}</title></head>\n<body>\n{body}\n</body></html>\n')
