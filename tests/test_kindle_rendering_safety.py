@@ -129,5 +129,30 @@ class ConversionTests(unittest.TestCase):
         self.assertLess(xhtml.index("<h1>"), xhtml.index("Just a paragraph."))
 
 
+class VersionedTitleTests(unittest.TestCase):
+    def test_version_suffix_added_to_title(self):
+        self.assertEqual(mtk.versioned_book_title("DSPy", "outputs/dspy_V2.epub"), "DSPy (V2)")
+        self.assertEqual(mtk.versioned_book_title("DSPy", "outputs/dspy_v3.epub"), "DSPy (V3)")
+
+    def test_no_suffix_without_version(self):
+        self.assertEqual(mtk.versioned_book_title("DSPy", "outputs/dspy.epub"), "DSPy")
+        self.assertEqual(mtk.versioned_book_title("Step V2", "outputs/stepV2.epub"), "Step V2")
+
+    def test_not_doubled_when_title_already_versioned(self):
+        self.assertEqual(mtk.versioned_book_title("DSPy (V2)", "dspy_V2.epub"), "DSPy (V2)")
+
+    def test_epub_metadata_title_versioned(self):
+        tmp = tempfile.mkdtemp()
+        in_path = os.path.join(tmp, "doc.md")
+        out_path = os.path.join(tmp, "doc_V2.epub")
+        with open(in_path, "w", encoding="utf-8") as f:
+            f.write("# My Doc\n\nText.\n")
+        mtk.convert(in_path, out_path)
+        opf = zipfile.ZipFile(out_path).read("EPUB/content.opf").decode("utf-8")
+        self.assertIn("<dc:title>My Doc (V2)</dc:title>", opf)
+        self.assertIn("<h1>My Doc</h1>", _chapters({k: zipfile.ZipFile(out_path).read(k)
+                                                    for k in zipfile.ZipFile(out_path).namelist()}))
+
+
 if __name__ == "__main__":
     unittest.main()

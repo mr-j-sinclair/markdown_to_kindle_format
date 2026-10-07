@@ -4302,6 +4302,21 @@ _LOADERS = {
 _LOADERS.update({ext: load_image_file for ext in IMAGE_MEDIA_TYPES})
 
 
+_OUTPUT_VERSION_RE = re.compile(r"_[Vv](\d+)$")
+
+
+def versioned_book_title(title: str, output_path: str) -> str:
+    """A re-sent book is written as <name>_V2.epub, _V3, ... -- carry that
+    version into the title the Kindle library shows ("Title (V2)"), since
+    the library lists books by title, not attachment filename."""
+    stem = os.path.splitext(os.path.basename(output_path))[0]
+    m = _OUTPUT_VERSION_RE.search(stem)
+    if not m:
+        return title
+    suffix = f"(V{int(m.group(1))})"
+    return title if title.endswith(suffix) else f"{title} {suffix}"
+
+
 def convert(input_path, output_path, title=None, author=None, subtitle=None, mermaid_images=True,
             output_format="epub", page_size="a4", footer=None, margins="default"):
     ext = os.path.splitext(input_path)[1].lower()
@@ -4360,7 +4375,7 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
         sub.string = subtitle
         leading_h1.insert_after(sub)
 
-    builder = EpubBuilder(title=doc_title, author=author)
+    builder = EpubBuilder(title=versioned_book_title(doc_title, output_path), author=author)
 
     for rel_path, content, media_type in image_registry.images:
         builder.add_image(content, rel_path, media_type)

@@ -40,6 +40,7 @@ For a church Order of Service / notices email, also invoke the `order-of-service
 - `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
 - Whether to append `--no-send-to-kindle` depends on what's being converted; see "Send-to-Kindle delivery."
 - Name `<name>` after that item's own title/subject (slugified), never a generic or shared batch name (e.g. not `linkedin_posts_2026-09-05`); this filename becomes the Send-to-Kindle email's attachment name via `os.path.basename()`, so a generic name ships a generic attachment.
+- When re-sending an item already delivered to Kindle, write `outputs/<name>_V2.epub`, then `_V3`, … (check `outputs/` for the next number; keep the `inputs/` name). The converter appends "(V2)" etc. to the Kindle library title automatically from that suffix.
 - When the user hands over several distinct sources in one request (e.g. multiple pasted links), run the full pipeline separately per source: its own `inputs/<name>.md`, its own `outputs/<name>.epub`, and, once eligible, its own separate Send-to-Kindle email. Never merge independent sources into one Markdown file or one email, even if they share a platform, date, or topic — one combined file for unrelated LinkedIn posts is the canonical mistake to avoid.
 
 ## Send-to-Kindle delivery
