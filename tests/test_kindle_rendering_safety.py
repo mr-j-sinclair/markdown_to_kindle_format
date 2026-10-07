@@ -22,10 +22,20 @@ BOX_DIAGRAM = """\
               Model/provider
 """
 
+# A box diagram short enough (<= 6 lines) to be allowed through as ASCII.
+SMALL_BOX_DIAGRAM = """\
+      Your application
+   ┌─────────┴─────────┐
+Pydantic              DSPy
+   └─────────┬─────────┘
+             ▼
+       Model/provider
+"""
+
 DOC = f"""# DSPy and Pydantic & JEV
 
 ```text
-{BOX_DIAGRAM}```
+{SMALL_BOX_DIAGRAM}```
 
 ```text
 API
@@ -81,6 +91,61 @@ class TextDiagramDetectionTests(unittest.TestCase):
         self.assertTrue(png.startswith(b"\x89PNG"))
 
 
+class DiagramGateTests(unittest.TestCase):
+    """An ASCII flow diagram over six lines must arrive as ```mermaid;
+    the converter refuses rather than shipping a text screenshot."""
+
+    def test_large_ascii_diagram_blocks_conversion(self):
+        with self.assertRaises(mtk.UnconvertedDiagramError) as ctx:
+            _convert(f"# T\n\nIntro.\n\n```text\n{BOX_DIAGRAM}```\n")
+        self.assertIn("line 6", str(ctx.exception))
+        self.assertIn("mermaid", str(ctx.exception))
+
+    def test_untagged_arrow_flow_blocks_conversion(self):
+        flow = "A\n  ↓\nB\n  ↓\nC\n  ↓\nD\n"
+        with self.assertRaises(mtk.UnconvertedDiagramError):
+            _convert(f"# T\n\n```\n{flow}```\n")
+
+    def test_prose_with_arrows_is_not_a_diagram(self):
+        prose = ("Determinism:\nSame input → same output?\n\nCalibration:\n"
+                 "When model says 80%, is it right?\n\nAccuracy:\nHow often?\n")
+        self.assertFalse(mtk.is_flow_diagram(prose))
+        xhtml = _chapters(_convert(f"# T\n\n```text\n{prose}```\n"))
+        self.assertIn("Same input → same output?", xhtml)
+        self.assertNotIn("text-diagram-img", xhtml)
+
+    def test_unrenderable_mermaid_blocks_conversion(self):
+        with self.assertRaises(mtk.UnconvertedDiagramError):
+            _convert("# T\n\n```mermaid\npie title Pets\n  \"Dogs\" : 3\n```\n")
+
+    def test_mermaid_line_parser_would_drop_blocks_conversion(self):
+        bad = "flowchart TB\n    A[Start] --> B[End]\n    B --> C[Bad [nested] label]\n"
+        with self.assertRaises(mtk.UnconvertedDiagramError) as ctx:
+            _convert(f"# T\n\n```mermaid\n{bad}```\n")
+        self.assertIn("would be dropped", str(ctx.exception))
+
+    def test_mermaid_replacement_converts(self):
+        good = "flowchart TB\n    A[#quot;Is the shape correct?#quot;] --> B[Model]\n"
+        xhtml = _chapters(_convert(f"# T\n\n```mermaid\n{good}```\n"))
+        self.assertIn("mermaid-img", xhtml)
+
+    def test_mermaid_quote_entity(self):
+        self.assertEqual(mtk._mermaid_clean_label("#quot;Hi#quot;"), '"Hi"')
+
+    def test_cli_exits_3_and_writes_nothing(self):
+        import subprocess
+        tmp = tempfile.mkdtemp()
+        src = os.path.join(tmp, "d.md")
+        out = os.path.join(tmp, "d.epub")
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(f"# T\n\n```text\n{BOX_DIAGRAM}```\n")
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "md_to_kindle.py")
+        result = subprocess.run([sys.executable, script, src, out, "--no-send-to-kindle"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 3)
+        self.assertFalse(os.path.exists(out))
+
+
 class KindleSafeSymbolTests(unittest.TestCase):
     def test_status_symbols_become_text(self):
         self.assertEqual(mtk.kindle_safe_symbols("✅ Excellent"), "[Yes] Excellent")
@@ -99,7 +164,7 @@ class ConversionTests(unittest.TestCase):
         cls.xhtml = _chapters(cls.files)
 
     def test_box_diagrams_rendered_as_images(self):
-        self.assertEqual(self.xhtml.count('class="content-img text-diagram-img"'), 2)
+        self.assertEqual(self.xhtml.count('class="content-img text-diagram-img"'), 2)  # small box + tree
         pre_blocks = [seg.split("</pre>")[0] for seg in self.xhtml.split("<pre")[1:]]
         self.assertFalse(any("┌" in b or "├" in b for b in pre_blocks))
 

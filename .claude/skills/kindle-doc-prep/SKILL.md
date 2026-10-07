@@ -72,14 +72,19 @@ a judgment call you make by hand while preparing the source Markdown:
   diagrams that long tend to render illegibly on an e-ink Kindle screen.
 - ASCII diagrams of six lines or fewer may remain in a plain code fence —
   don't convert those unnecessarily.
-- Automatic backstop (software, `resolve_text_diagrams()`): any diagram
-  left in an untagged or ```` ```text ```` fence that is over six lines,
-  over 40 columns, or uses box-drawing glyphs (`┌ ─ │ ├ ▼`) is rendered to
-  a monospace image with the author's exact characters. So a skipped
-  Mermaid conversion is never shown as wrapped, sheared ASCII — but
-  Mermaid is still preferred for flowcharts because it reads larger on
-  e-ink. Keep diagrams in an untagged/`text` fence; a fence tagged with a
-  code language (```` ```python ````) is treated as code and never imaged.
+- This applies to chat exports and other third-party text too: the
+  diagram is structure, not wording. Keep every label's words verbatim
+  (`<br>` for line breaks, `#quot;` for a quote mark).
+- Hard gate (software, `find_unconverted_diagrams()`): conversion exits
+  with code 3, writing and sending nothing, if an untagged/```` ```text ````
+  flow diagram over six lines remains, a ```` ```mermaid ```` fence doesn't
+  render, or a flowchart has a line the parser would drop. Fix the source
+  by converting to Mermaid; never re-tag a diagram as code
+  (```` ```python ````) or strip its arrows to get past the gate.
+- Small diagrams (six lines or fewer) that are wider than 40 columns or
+  use box-drawing glyphs are still drawn as a monospace image by
+  `resolve_text_diagrams()`. Prose that only contains an arrow
+  (`Same input → same output?`) isn't a diagram and stays as text.
 
 ## Symbols (context — fully automated, EPUB only)
 

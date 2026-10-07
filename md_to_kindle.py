@@ -772,6 +772,8 @@ def _mermaid_clean_label(text):
     # only honours it as the two source characters backslash+n inside a
     # quoted label.
     text = re.sub(r"<br\s*/?>", "\\n", text, flags=re.IGNORECASE)
+    # Mermaid's entity for a literal quote mark inside a label.
+    text = text.replace("#quot;", '"')
     return text
 
 
@@ -834,7 +836,7 @@ def _flowchart_effective_direction(direction, edges):
     return direction
 
 
-def parse_mermaid_flowchart(source: str):
+def parse_mermaid_flowchart(source: str, unparsed=None):
     """Parse a minimal subset of Mermaid `flowchart`/`graph` syntax into
     (direction, nodes, edges). Returns None for anything this parser
     doesn't recognise as a flowchart at all (e.g. `sequenceDiagram`, or a
@@ -922,6 +924,8 @@ def parse_mermaid_flowchart(source: str):
             continue
         # Unrecognised line (e.g. a directive this parser doesn't model) --
         # skip it rather than failing the whole diagram.
+        if unparsed is not None:
+            unparsed.append(line)
 
     if not saw_header or not nodes:
         return None
@@ -1722,7 +1726,7 @@ def resolve_text_diagrams(soup, image_registry):
         lines = [line for line in text.rstrip().splitlines()]
         while lines and not lines[0].strip():
             lines.pop(0)
-        if not lines or not is_text_diagram(text):
+        if not lines or not is_flow_diagram(text):
             continue
         width = max(len(line.rstrip()) for line in lines)
         small = len(lines) <= _DIAGRAM_MAX_TEXT_LINES and width <= _DIAGRAM_MAX_TEXT_COLS
@@ -1739,6 +1743,102 @@ def resolve_text_diagrams(soup, image_registry):
         wrapper = soup.new_tag("p")
         wrapper.append(img)
         pre.replace_with(wrapper)
+
+
+# =====================================================================
+# Diagram gate: an oversized ASCII flow diagram must arrive as Mermaid.
+#
+# kindle-doc-prep requires any ASCII flow/box diagram over six lines to be
+# rewritten as a ```mermaid flowchart before conversion. That was a manual
+# step, and when it was skipped the text-diagram backstop above quietly
+# shipped a monospace "screenshot" instead of a real diagram. So the
+# converter now refuses: an untagged/```text fence that is a flow diagram
+# and taller than _DIAGRAM_MAX_TEXT_LINES, a ```mermaid fence that doesn't
+# render, or a flowchart with lines the parser would silently drop all
+# raise UnconvertedDiagramError before any file is written or emailed.
+# Small diagrams (<= six lines) still go through resolve_text_diagrams().
+# =====================================================================
+
+# A line that only carries connector strokes ("   │", "  v", "──►" ...).
+_FLOW_STROKE_ONLY_RE = re.compile(r"^[\s|│┃v^↓↑▼▲►◄▶◀→←+\-─=┬┴┼]+$")
+_FLOW_STROKE_CHAR_RE = re.compile(r"[|│┃v^↓↑▼▲►◄▶◀→←]")
+_BOX_DRAWING_RE = re.compile(r"[\u2500-\u257F]")
+
+
+class UnconvertedDiagramError(ValueError):
+    """Raised by convert() when a diagram would reach the reader as text or
+    a text image instead of a rendered diagram."""
+
+
+def is_flow_diagram(text: str) -> bool:
+    """True when a plain-text block draws structure (boxes, trees, arrows
+    between lines) rather than prose that merely contains an arrow such as
+    "Same input → same output?": at least two lines carry box-drawing
+    glyphs, ASCII connectors ("-->", "+---"), or nothing but strokes."""
+    structural = 0
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        if (_BOX_DRAWING_RE.search(line) or _ASCII_CONNECTOR_RE.search(line)
+                or (_FLOW_STROKE_ONLY_RE.match(line) and _FLOW_STROKE_CHAR_RE.search(line))):
+            structural += 1
+    return structural >= 2
+
+
+def _source_line_of(source_lines, block_text):
+    """1-based source line where `block_text` (a fence's content) starts,
+    matching the whole block so repeated first lines aren't confused."""
+    block = [line.rstrip() for line in block_text.strip("\n").splitlines()]
+    if not block:
+        return None
+    stripped = [line.rstrip() for line in source_lines]
+    for i in range(len(stripped) - len(block) + 1):
+        if stripped[i:i + len(block)] == block:
+            return i + 1
+    return None
+
+
+def find_unconverted_diagrams(soup, mermaid_enabled=True, source_text=None):
+    """Return one human-readable problem string per diagram that would not
+    be shown as a rendered diagram. Empty list = safe to convert."""
+    source_lines = source_text.splitlines() if source_text else []
+    problems = []
+    for pre in soup.find_all("pre"):
+        code = pre.find("code")
+        classes = (code.get("class") if code is not None else None) or []
+        langs = {c[len("language-"):] for c in classes if c.startswith("language-")}
+        text = (code or pre).get_text()
+        number = _source_line_of(source_lines, text)
+        where = f"line {number}" if number else "fence"
+        first = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        if "mermaid" in langs:
+            if not mermaid_enabled:
+                continue
+            if render_mermaid_image(text) is None:
+                problems.append(f"{where}: ```mermaid fence does not render "
+                                f"(unsupported type or syntax): {first!r}")
+                continue
+        if langs and not langs & _DIAGRAM_FENCE_LANGS:
+            continue
+        lines = text.strip("\n").splitlines()
+        if len(lines) > _DIAGRAM_MAX_TEXT_LINES and is_flow_diagram(text):
+            problems.append(f"{where}: {len(lines)}-line ASCII diagram must be "
+                            f"rewritten as a ```mermaid flowchart: {first!r}")
+    return problems
+
+
+def check_mermaid_flowchart_complete(soup):
+    """Problem strings for ```mermaid flowcharts containing lines the parser
+    would skip -- each such line is a node or edge missing from the image."""
+    problems = []
+    for code in soup.select("pre > code.language-mermaid"):
+        text = code.get_text()
+        unparsed = []
+        if parse_mermaid_flowchart(text, unparsed=unparsed) is not None:
+            for line in unparsed:
+                problems.append(f"```mermaid flowchart line not understood "
+                                f"(would be dropped): {line!r}")
+    return problems
 
 
 # =====================================================================
@@ -4333,7 +4433,20 @@ def convert(input_path, output_path, title=None, author=None, subtitle=None, mer
     resolve_remote_images(soup, image_registry)
     # PROTOTYPE, easy to remove -- see the "Mermaid diagram image
     # rendering" section's ROLLBACK note above resolve_mermaid_diagrams().
+    diagram_problems = []
+    if mermaid_images:
+        diagram_problems += check_mermaid_flowchart_complete(soup)
     resolve_mermaid_diagrams(soup, image_registry, enabled=mermaid_images)
+    source_text = None
+    if ext == ".md":
+        with open(input_path, encoding="utf-8") as f:
+            source_text = f.read()
+    diagram_problems += find_unconverted_diagrams(soup, mermaid_images, source_text)
+    if diagram_problems:
+        raise UnconvertedDiagramError(
+            f"{input_path}: {len(diagram_problems)} diagram(s) would not render as diagrams "
+            "(see kindle-doc-prep, Diagrams). Nothing was written or sent.\n  "
+            + "\n  ".join(diagram_problems))
     resolve_text_diagrams(soup, image_registry)
 
     # Book title: --title, else the document's own leading H1 (so the Kindle
@@ -4551,9 +4664,13 @@ def main():
         basename = os.path.splitext(os.path.basename(input_path))[0]
         output_path = os.path.join(OUTPUT_DIR, basename + (".pdf" if output_format == "pdf" else ".epub"))
 
-    convert(input_path, output_path, title=args.title, author=args.author, subtitle=args.subtitle,
-            mermaid_images=(args.mermaid_images == "on"), output_format=output_format,
-            page_size=args.page_size, footer=args.footer, margins=args.margins)
+    try:
+        convert(input_path, output_path, title=args.title, author=args.author, subtitle=args.subtitle,
+                mermaid_images=(args.mermaid_images == "on"), output_format=output_format,
+                page_size=args.page_size, footer=args.footer, margins=args.margins)
+    except UnconvertedDiagramError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(3)
     print(f"Wrote {output_path}")
 
     if kindle_delivery.should_send_to_kindle(args.send_to_kindle, output_format):
