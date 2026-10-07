@@ -3339,11 +3339,11 @@ class EpubBuilder:
         self.book.toc = tuple(epub.Link(c.file_name, c.title, c.id) for c in self.chapters)
         self.book.add_item(epub.EpubNcx())
         self.book.add_item(epub.EpubNav())
-        # Non-linear: the table of contents stays reachable from the
-        # Kindle "Go To" menu but isn't shown as the book's first page.
-        spine = [("nav", "no")]
-        spine.extend(self.chapters)
-        self.book.spine = spine
+        # The nav document is in the manifest (EPUB 3 requires it, and it
+        # plus the NCX feed Kindle's "Go To" menu) but deliberately not in
+        # the spine: Send-to-Kindle ignores linear="no" and would show it
+        # as a contents page before the content.
+        self.book.spine = list(self.chapters)
         epub.write_epub(output_path, self.book)
 
 

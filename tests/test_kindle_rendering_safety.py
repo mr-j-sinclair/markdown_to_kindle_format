@@ -117,7 +117,8 @@ class ConversionTests(unittest.TestCase):
     def test_no_title_page_and_toc_not_first(self):
         opf = self.files["EPUB/content.opf"].decode("utf-8")
         self.assertNotIn("EPUB/titlepage.xhtml", self.files)
-        self.assertIn('<itemref idref="nav" linear="no"/>', opf)
+        self.assertIn('properties="nav"', opf)  # still in the manifest
+        self.assertNotIn('<itemref idref="nav"', opf)  # but not a page
         self.assertIn("<dc:title>DSPy and Pydantic &amp; JEV</dc:title>", opf)
 
     def test_title_heading_added_when_no_leading_h1(self):
