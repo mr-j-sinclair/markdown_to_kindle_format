@@ -6,7 +6,7 @@ name: NTIY episode notes to Kindle
 
 on:
   schedule:
-    - cron: "15 */2 * * *"   # every 2h, every day; idempotent, so extra polls are harmless
+    - cron: "15 */6 * * *"   # 00:15, 06:15, 12:15, 18:15 UTC daily; idempotent, so extra polls are harmless
   workflow_dispatch:
     inputs:
       preview:

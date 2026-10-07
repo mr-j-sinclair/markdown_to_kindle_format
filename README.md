@@ -288,7 +288,7 @@ episode's show notes from *Read the Bible: The New Testament in a Year*
 your Kindle. They run on GitHub Actions, so the Mac doesn't need to be on.
 
 ```text
-cron (every 2h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
+cron (every 6h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
                 -> md_to_kindle.py (EPUB + Send to Kindle) -> record GUID on ntiy-state
 ```
 
