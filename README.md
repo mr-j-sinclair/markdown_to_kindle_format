@@ -280,6 +280,50 @@ set fails with a clear error rather than guessing an address.
   risking a duplicate Kindle document), and rerunning the command re-sends
   by design.
 
+## New Testament in a Year automation
+
+`ntiy_feed.py` plus `.github/workflows/ntiy_daily.yml` email each new
+episode's show notes from *Read the Bible: The New Testament in a Year*
+([Podbean RSS](https://feed.podbean.com/NewTestamentinaYear/feed.xml)) to
+your Kindle. They run on GitHub Actions, so the Mac doesn't need to be on.
+
+```text
+cron (every 2h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
+                -> md_to_kindle.py (EPUB + Send to Kindle) -> record GUID on ntiy-state
+```
+
+- **Source:** each RSS item's `<content:encoded>` already holds the full
+  notes, so no web page is scraped. The title line, the "Episode Notes:"
+  label, the homepage, reading-plan, contact, Facebook and website lines,
+  and empty paragraphs are dropped. Everything else passes through
+  verbatim, and a link to the original episode is added.
+- **Idempotency:** processed GUIDs live in `ntiy_state.json` on the
+  `ntiy-state` branch, never on `main`. Each `--next` call delivers at most
+  one episode, oldest first. A GUID is recorded only after `md_to_kindle.py`
+  exits `0`, and the workflow commits state after every episode. Delivery
+  is **at-least-once**: a failed convert or send is retried on the next
+  poll. In the rare case where an email is sent but the state push fails,
+  the next poll sends a duplicate rather than skipping the episode.
+- **Flood guard:** if more than 5 episodes are unseen, nothing is sent and
+  the run fails, for example if Podbean re-IDs the feed. Re-run `--seed`,
+  or raise `--max-sends` for one run.
+- **Secrets** (repo Settings -> Secrets and variables -> Actions):
+  `MD_TO_KINDLE_SENDER_EMAIL`, `MD_TO_KINDLE_DEST_EMAIL`,
+  `MD_TO_KINDLE_APP_PASSWORD`. Use secrets rather than variables so the
+  values are masked in this public repo's logs.
+- **Manual runs:** in Actions -> "NTIY episode notes to Kindle" -> Run
+  workflow. Tick `preview` to build the newest episode's EPUB as a
+  downloadable artifact without sending it or touching state.
+- **Force a resend:** delete that GUID's entry from `ntiy_state.json` on the
+  `ntiy-state` branch, then run the workflow.
+- **Local use:**
+
+```bash
+.venv/bin/python3 ntiy_feed.py --preview                    # newest episode -> outputs/, no send
+.venv/bin/python3 ntiy_feed.py --next --dry-run --state /tmp/s.json  # show what would be sent
+.venv/bin/python3 ntiy_feed.py --seed --state ntiy_state.json        # first-time state (marks all as done)
+```
+
 ## Mermaid diagrams
 
 Fenced ` ```mermaid ` code blocks are rendered to embedded colour images

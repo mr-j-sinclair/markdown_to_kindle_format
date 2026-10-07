@@ -15,6 +15,8 @@ Before preparing or modifying any document content for this pipeline — normali
 
 It covers: `N.`/`N)` ordered-list normalization edge cases, the six-line ASCII-diagram-to-Mermaid threshold and the supported Mermaid subset, image/video capture fallback order, label-plus-explanation bullet splitting, full `.eml` parsing and attachment handling, and the linked-post/article two-section structure.
 
+The scheduled New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. When changing its cleaner, keep the same fidelity contract: drop only boilerplate lines and pass episode text through verbatim. Its processed-episode state lives on the `ntiy-state` branch; never commit it to `main`.
+
 For a church Order of Service / notices email, also invoke the `order-of-service` Skill (after `kindle-doc-prep`); it owns that document's format, responsive-reading type preservation, and web-fetched GNT readings.
 
 ## Sub-agent verification

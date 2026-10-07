@@ -1,0 +1,91 @@
+# Emails each new "New Testament in a Year" episode's show notes to Kindle.
+# See ntiy_feed.py for the logic and README.md ("New Testament in a Year
+# automation") for setup. Processed-episode state lives on the `ntiy-state`
+# branch, never on main.
+name: NTIY episode notes to Kindle
+
+on:
+  schedule:
+    - cron: "15 */2 * * *"   # every 2h, every day; idempotent, so extra polls are harmless
+  workflow_dispatch:
+    inputs:
+      preview:
+        description: "Only build an EPUB of the newest episode (no send, no state change)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ntiy
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MD_TO_KINDLE_SENDER_EMAIL: ${{ secrets.MD_TO_KINDLE_SENDER_EMAIL }}
+      MD_TO_KINDLE_DEST_EMAIL: ${{ secrets.MD_TO_KINDLE_DEST_EMAIL }}
+      MD_TO_KINDLE_APP_PASSWORD: ${{ secrets.MD_TO_KINDLE_APP_PASSWORD }}
+      # No OS keyring on the runner; make keyring return nothing so
+      # kindle_delivery falls back to MD_TO_KINDLE_APP_PASSWORD.
+      PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out state branch
+        if: ${{ !inputs.preview }}
+        uses: actions/checkout@v7
+        with:
+          ref: ntiy-state
+          path: state
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Preview newest episode
+        if: ${{ inputs.preview }}
+        run: python ntiy_feed.py --preview
+
+      - name: Deliver unseen episodes
+        if: ${{ !inputs.preview }}
+        run: |
+          git -C state config user.name "github-actions[bot]"
+          git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # One episode per invocation; state is committed after each so a
+          # later failure never loses an earlier delivery's record.
+          for i in 1 2 3 4 5; do
+            rc=0
+            python ntiy_feed.py --next --state state/ntiy_state.json || rc=$?
+            if [ "$rc" -eq 3 ]; then exit 0; fi
+            if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+            git -C state add ntiy_state.json
+            git -C state commit -q -m "Record delivered NTIY episode"
+            pushed=false
+            for attempt in 1 2 3; do
+              if git -C state push -q origin HEAD:ntiy-state; then pushed=true; break; fi
+              git -C state pull -q --rebase origin ntiy-state
+            done
+            if [ "$pushed" != true ]; then
+              echo "::error::Episode was sent but its state could not be pushed; the next run may send a duplicate."
+              exit 1
+            fi
+          done
+
+      - name: Upload generated files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ntiy-${{ github.run_id }}
+          path: |
+            inputs/ntiy-*.html
+            outputs/ntiy-*.epub
+          retention-days: 14
+          if-no-files-found: ignore
