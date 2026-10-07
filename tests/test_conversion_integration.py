@@ -23,6 +23,14 @@ More text before a paren-style list.
 1) First paren item
 2) Second paren item
 
+Escaped paren items straight after prose:
+1\\) First escaped item
+2\\) Second escaped item
+
+An interrupting paragraph.
+
+3\\) Lone resumed item
+
 ```mermaid
 flowchart LR
     A[Start] --> B[End]
@@ -185,6 +193,8 @@ class ConversionIntegrationTests(unittest.TestCase):
             self.assertIn("<ol>", xhtml)
             self.assertGreaterEqual(xhtml.count("<ol>"), 2)
             self.assertIn("2026-08-31 09:44:08", xhtml)
+            self.assertIn("<li>Second escaped item</li>", xhtml)
+            self.assertRegex(xhtml, r'<ol start="3">\s*<li>Lone resumed item</li>')
 
     @unittest.skipUnless(shutil.which("dot"), "graphviz 'dot' binary not on PATH")
     def test_mermaid_diagram_renders_to_image(self):

@@ -1713,7 +1713,10 @@ def promote_inline_dash_sublist(text: str) -> str:
     return "\n".join(out)
 
 
-_PAREN_LIST_ITEM_RE = re.compile(r"^(\s*)(\d{1,9})\)(\s+)(\S.*)$")
+# The optional backslash covers chat exporters (ChatGPT/Claude "Save as
+# Markdown") that escape the paren as '1\)' -- unrecognized, those items
+# collapsed into one run-on line inside Question boxes.
+_PAREN_LIST_ITEM_RE = re.compile(r"^(\s*)(\d{1,9})\\?\)(\s+)(\S.*)$")
 
 
 def normalize_paren_ordered_lists(text: str) -> str:
@@ -1723,8 +1726,10 @@ def normalize_paren_ordered_lists(text: str) -> str:
     lists, which otherwise collapses into one run-on paragraph. Rewrite
     'N)' -> 'N.' at the start of a line, but only where it's genuinely
     opening/continuing a list (preceded by a blank line or another such
-    marker line) so an incidental parenthesized reference elsewhere in
-    prose is never touched."""
+    marker line, or directly followed by another such marker line -- a
+    run of two or more is a list even straight after a prose line, e.g.
+    'explain to me:\\n1) foo\\n2) bar') so an incidental parenthesized
+    reference elsewhere in prose is never touched."""
     lines = text.split("\n")
     fence_mask = _line_fence_mask(lines)
     out = []
@@ -1736,7 +1741,11 @@ def normalize_paren_ordered_lists(text: str) -> str:
             prev_is_boundary = (not prev_in_fence) and (
                 prev.strip() == "" or _PAREN_LIST_ITEM_RE.match(prev) is not None
             )
-            if prev_is_boundary:
+            next_is_item = (
+                i + 1 < len(lines) and not fence_mask[i + 1]
+                and _PAREN_LIST_ITEM_RE.match(lines[i + 1]) is not None
+            )
+            if prev_is_boundary or next_is_item:
                 indent, num, spacing, content = m.groups()
                 out.append(f"{indent}{num}.{spacing}{content}")
                 continue
@@ -2641,7 +2650,11 @@ def render_list(tag) -> str:
         text = "".join(content_parts).strip()
         nested_html = "".join(render_list(n) for n in nested)
         items.append(f"<li>{text}{nested_html}</li>")
-    return f"<{name}>{''.join(items)}</{name}>"
+    # Keep an <ol>'s starting number (e.g. a lone "3." question resuming
+    # an interrupted list) instead of silently renumbering it from 1.
+    start = tag.get("start", "")
+    start_attr = f' start="{start}"' if name == "ol" and start.isdigit() and start != "1" else ""
+    return f"<{name}{start_attr}>{''.join(items)}</{name}>"
 
 
 # Tag names render_block treats as its own block, independent of
@@ -3585,7 +3598,8 @@ class PdfRenderer:
 
     def render_list(self, tag, ordered=False, level=0):
         flowables = []
-        counter = 1
+        start = tag.get("start", "")
+        counter = int(start) if start.isdigit() else 1
         style = self._bullet_style(level)
         for li in tag.find_all("li", recursive=False):
             nested_lists = li.find_all(["ul", "ol"], recursive=False)

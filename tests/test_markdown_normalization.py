@@ -52,6 +52,20 @@ class NormalizeParenOrderedListsTests(unittest.TestCase):
         expected = "1. First\n2. Second\n3. Third\n"
         self.assertEqual(mtk.normalize_paren_ordered_lists(text), expected)
 
+    def test_converts_backslash_escaped_paren(self):
+        text = "Intro.\n\n1\\) First\n2\\) Second\n"
+        expected = "Intro.\n\n1. First\n2. Second\n"
+        self.assertEqual(mtk.normalize_paren_ordered_lists(text), expected)
+
+    def test_converts_run_directly_after_prose_line(self):
+        text = "Explain to me what\n1\\) First\n2\\) Second\n"
+        expected = "Explain to me what\n1. First\n2. Second\n"
+        self.assertEqual(mtk.normalize_paren_ordered_lists(text), expected)
+
+    def test_lone_item_after_prose_line_left_alone(self):
+        text = "A wrapped sentence ending\n2) with a lone marker.\n"
+        self.assertEqual(mtk.normalize_paren_ordered_lists(text), text)
+
     def test_mid_sentence_parenthetical_left_alone(self):
         text = "See step (2) above for details.\n"
         self.assertEqual(mtk.normalize_paren_ordered_lists(text), text)
