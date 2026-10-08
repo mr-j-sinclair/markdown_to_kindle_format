@@ -2,68 +2,50 @@
 
 ## Core fidelity contract
 
-- EPUB is always the default. Do not ask which format to use.
-- Produce PDF only when the user explicitly requests PDF; "convert this" or "prepare this for Kindle" means EPUB.
-- When preparing source Markdown, change only structures required for correct rendering, such as list markers, blank-line separation, oversized ASCII diagrams, and header-date formats.
+- EPUB is always the default; never ask which format. Produce PDF only when the user explicitly requests PDF ("convert this"/"prepare this for Kindle" means EPUB).
+- When preparing source Markdown, change only structures required for correct rendering, such as list markers, blank-line separation, oversized ASCII diagrams, and header-date formats. Anything else is scope creep.
 - Do not alter spelling, grammar, wording, or phrasing unless explicitly requested; if correct rendering would require changing the author's wording, treat that as a converter bug and fix the heuristic instead.
-- Treat non-structural edits as scope creep.
-- Changes to `load_markdown()` or any preprocessing helper must preserve every guarantee in this file.
 
 ## Preparation procedures
 
-Before preparing or modifying any document content for this pipeline — normalizing lists, redrawing a diagram, ingesting an email, structuring a linked post/article, or any other Markdown-prep judgment call — invoke the `kindle-doc-prep` Skill first. Do not rely on it auto-triggering; call it explicitly at the start of that work, the same way this file is always read at the start of a session.
-
-It covers: `N.`/`N)` ordered-list normalization edge cases, the six-line ASCII-diagram-to-Mermaid threshold and the supported Mermaid subset, image/video capture fallback order, label-plus-explanation bullet splitting, full `.eml` parsing and attachment handling, and the linked-post/article two-section structure.
-
-The scheduled New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. When changing its cleaner, keep the same fidelity contract: drop only boilerplate lines and pass episode text through verbatim. Its processed-episode state lives on the `ntiy-state` branch; never commit it to `main`.
+Before preparing or modifying any document content for this pipeline — normalizing lists, redrawing a diagram, ingesting an email, structuring a linked post/article, or any other Markdown-prep judgment call — invoke the `kindle-doc-prep` Skill first. Do not rely on it auto-triggering; call it explicitly at the start of that work.
 
 For a church Order of Service / notices email, also invoke the `order-of-service` Skill (after `kindle-doc-prep`); it owns that document's format, responsive-reading type preservation, and web-fetched GNT readings.
 
-## Sub-agent verification
-
-- Before spawning a sub-agent to verify an edited diagram or other structural change against its original, snapshot the untouched file to the session scratchpad first — before any Edit call touches the real file — then give the verifier (fork or fresh) both the snapshot and the edited file to read itself; never a paraphrase pasted into the prompt. An exhaustive entity-by-entity audit is unnecessary — confirm the general spirit/shape matches and nothing important is conceptually wrong or missing.
+The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. Its cleaner may drop only boilerplate lines and must pass episode text through verbatim. Its state lives on the `ntiy-state` branch; never commit it to `main`.
 
 ## Verification
 
-- `tests/` holds automated regression tests for `load_markdown()`'s deterministic normalizers (export timestamps, ordered lists, blank-line spacing, metadata line breaks) plus end-to-end conversion checks, including Kindle rendering safety (ASCII diagrams over six lines block conversion until rewritten as Mermaid, smaller ones → images, emoji/status symbols → text or inline images, no auto title page); run via `.venv/bin/python3 -m unittest discover -s tests` after changing any preprocessing helper. Visual/legibility checks (rendered EPUB appearance, Kindle readability, Mermaid image quality) remain manual.
-- After changing `load_markdown()` or a preprocessing helper, also reconvert representative real inputs covering: ordinary `1.` ordered lists, `Created`/`Updated`/`Exported` chat timestamps, and Mermaid diagrams — inspect the generated EPUB XHTML by unzipping it rather than relying only on visual appearance.
-- For label/detail bullets, verify real nested `<ul><li>` output.
-- For chat exports, inspect rendered Question/Prompt boxes for intact line separation.
-- For Mermaid work, inspect the rendered image for Kindle legibility and obtain the independent semantic check required above.
+- Sub-agent checks: before spawning a sub-agent to verify an edited diagram or other structural change against its original, snapshot the untouched file to the session scratchpad first — before any Edit call touches the real file — then give the verifier (fork or fresh) both the snapshot and the edited file to read itself; never a paraphrase pasted into the prompt. An exhaustive entity-by-entity audit is unnecessary — confirm the general spirit/shape matches and nothing important is conceptually wrong or missing.
+- After changing `load_markdown()` or any preprocessing helper (which must preserve every guarantee in this file), run `.venv/bin/python3 -m unittest discover -s tests` (normalizer + end-to-end/Kindle-safety tests). Then reconvert representative real inputs covering ordinary `1.` ordered lists, `Created`/`Updated`/`Exported` chat timestamps, and Mermaid diagrams, and inspect the generated EPUB XHTML by unzipping it rather than relying only on visual appearance.
+- Inspect manually: real nested `<ul><li>` output for label/detail bullets; intact line separation in chat-export Question/Prompt boxes; Kindle legibility of rendered Mermaid images, plus the independent sub-agent check above.
 
 ## Inputs and outputs
 
-- Put every generated human-readable Markdown deliverable—summary, report, or write-up—in `inputs/`.
-- Convert it using the virtual-environment interpreter, with an `.epub` or `.pdf` destination per the output-format rules above:
+- Put every generated human-readable Markdown deliverable in `inputs/` and convert it with the venv interpreter (`.pdf` destination only per the format rule):
   `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub`
-- Always use `.venv/bin/python3`; system Python lacks required dependencies such as Graphviz and may fail silently.
+- Always use `.venv/bin/python3`; system Python lacks Graphviz etc. and may fail silently.
 - `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
-- Whether to append `--no-send-to-kindle` depends on what's being converted; see "Send-to-Kindle delivery."
-- Name `<name>` after that item's own title/subject (slugified), never a generic or shared batch name (e.g. not `linkedin_posts_2026-09-05`); this filename becomes the Send-to-Kindle email's attachment name via `os.path.basename()`, so a generic name ships a generic attachment.
-- When re-sending an item already delivered to Kindle, write `outputs/<name>_V2.epub`, then `_V3`, … (check `outputs/` for the next number; keep the `inputs/` name). The converter appends "(V2)" etc. to the Kindle library title automatically from that suffix.
-- When the user hands over several distinct sources in one request (e.g. multiple pasted links), run the full pipeline separately per source: its own `inputs/<name>.md`, its own `outputs/<name>.epub`, and, once eligible, its own separate Send-to-Kindle email. Never merge independent sources into one Markdown file or one email, even if they share a platform, date, or topic — one combined file for unrelated LinkedIn posts is the canonical mistake to avoid.
+- Name `<name>` after that item's own title/subject (slugified), never a generic or batch name (e.g. not `linkedin_posts_2026-09-05`); the filename becomes the Kindle email's attachment name.
+- When re-sending an item already delivered to Kindle, write `outputs/<name>_V2.epub`, then `_V3`, … (check `outputs/` for the next number; keep the `inputs/` name).
+- Several distinct sources in one request (e.g. multiple pasted links) → run the full pipeline per source: its own `inputs/<name>.md`, `outputs/<name>.epub`, and separate Kindle email. Never merge them, even if they share platform, date, or topic (e.g. never one combined file for unrelated LinkedIn posts).
 
 ## Send-to-Kindle delivery
 
 - Delivery logic lives only in `kindle_delivery.py`; conversion code must never import `smtplib`/`keyring` directly.
 - Never hardcode, log, print, or write the Gmail App Password anywhere—source, docs, tracebacks, or generated summaries.
-- `--send-to-kindle`/`--no-send-to-kindle` default to sending after a successful EPUB conversion only; PDF output is never auto-sent, even if passed explicitly. This default is implemented in the software itself, not a Claude-side choice.
-- No hidden retries and no send-deduplication; a rerun of the command re-sends by design.
-- Suppress sending with `--no-send-to-kindle` only for conversions about the software itself (development/regression runs, the source-change summary doc from "Completion and source control"); any conversion the user actually asked for—an article, social post, email, note, or other content deliverable—is a real delivery, not a dev artifact, so let it auto-send.
+- The software itself auto-sends after a successful EPUB conversion; PDF is never auto-sent, even with `--send-to-kindle`. No hidden retries or deduplication: a rerun re-sends by design.
+- Suppress sending with `--no-send-to-kindle` only for conversions about the software itself (development/regression runs, the source-change summary doc below); any conversion the user actually asked for—article, social post, email, note, or other content—is a real delivery, so let it auto-send.
 
 ## Completion and source control
 
 - After implementing and verifying a bug fix or feature in a source `.py` file, or making a `CLAUDE.md`-only change, commit it and push it to `origin/main` in the same turn without waiting to be asked.
 - Other cases require explicit user direction unless another instruction covers them.
-- Produce a human-readable converted summary document (written to `inputs/`, converted into `outputs/`, and referenced in the reply) only for changes to source `.py` files, dependencies, or the runtime environment/virtual environment.
-- Do not create a summary document for Markdown preparation, formatting/list/diagram fixes, reconversion, rendering-only edits, or `CLAUDE.md` edits; a chat reply is sufficient.
+- Produce a converted summary document (`inputs/` → `outputs/`, referenced in the reply) only for changes to source `.py` files, dependencies, or the runtime/virtual environment; for anything else a chat reply is sufficient.
 
-## Copyright-limited content
+## Copyright-limited content (any source)
 
-- Applies to any source (linked article, email attachment, etc.), not just social posts.
-- If full text can't be reproduced for copyright reasons and is summarized or truncated, disclose that explicitly inside the output document.
-- Name both the Markdown source and the converted output file to say so explicitly, e.g. append `_summary` (`article_summary.md`, `article_summary.epub`).
-- Make the very first line of the output document an explicit warning that the content is summarized, immediately followed by a clickable link to the original source; don't bury this notice further down the page.
-- Always include a verified working link to the original source inside the EPUB/PDF.
+- If full text can't be reproduced for copyright reasons and is summarized or truncated, the output document's very first line must say so, immediately followed by a verified, working, clickable link to the original source.
+- Suffix both file names with `_summary` (`article_summary.md`, `article_summary.epub`).
 
 Keep this file at or below 150 lines; when adding a rule, merge or remove equivalent prose or move task-specific procedures to on-demand guidance.
