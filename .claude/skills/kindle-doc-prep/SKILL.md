@@ -86,6 +86,8 @@ nested bullet. Other label-plus-explanation forms must be split by hand:
 - Start with the document's own `# Title`; it becomes the opening page and
   the Kindle library title (unless `--title` overrides it). Don't add a
   title page or manual table of contents.
+- For copyright-limited summaries, the bold summary notice and verified
+  source link come immediately after that `# Title` (see `CLAUDE.md`).
 
 ## Images and videos
 

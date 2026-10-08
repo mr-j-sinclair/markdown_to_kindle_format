@@ -3,7 +3,7 @@
 ## Core fidelity contract
 
 - EPUB is always the default; never ask which format. Produce PDF only when the user explicitly requests PDF ("convert this"/"prepare this for Kindle" means EPUB).
-- When preparing source Markdown, change only structures required for correct rendering, such as list markers, blank-line separation, oversized ASCII diagrams, and header-date formats. Anything else is scope creep.
+- When preparing source Markdown, change only structures required for correct rendering, such as list markers, blank-line separation, oversized ASCII diagrams, and header-date formats. Anything else is scope creep. The only content exceptions are those a skill explicitly lists (email-chrome omission, mojibake repair when both MIME parts agree, clearly labelled authored notes).
 - Do not alter spelling, grammar, wording, or phrasing unless explicitly requested; if correct rendering would require changing the author's wording, treat that as a converter bug and fix the heuristic instead.
 
 ## Preparation procedures
@@ -12,7 +12,7 @@ Before preparing or modifying any document content for this pipeline — normali
 
 For a church Order of Service / notices email, also invoke the `order-of-service` Skill (after `kindle-doc-prep`); it owns that document's format, responsive-reading type preservation, and web-fetched GNT readings.
 
-The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. Its cleaner may drop only boilerplate lines and must pass episode text through verbatim. Its state lives on the `ntiy-state` branch; never commit it to `main`.
+The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. Its cleaner may drop only boilerplate, repeated titles/labels, and empty content, and make structural/whitespace-only changes (headings, key-verse blockquotes); episode wording passes through verbatim. Its state lives on the `ntiy-state` branch; never commit it to `main`.
 
 ## Verification
 
@@ -24,18 +24,18 @@ The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_
 
 - Put every generated human-readable Markdown deliverable in `inputs/` and convert it with the venv interpreter (`.pdf` destination only per the format rule):
   `.venv/bin/python3 md_to_kindle.py inputs/<name>.md outputs/<name>.epub`
-- Always use `.venv/bin/python3`; system Python lacks Graphviz etc. and may fail silently.
+- Always use `.venv/bin/python3`; system Python lacks the Python dependencies and may fail silently (Mermaid rendering also needs Graphviz's system `dot` binary).
 - `outputs/` contains only converter-rendered EPUB/PDF files; never place raw `.md` source there.
 - Name `<name>` after that item's own title/subject (slugified), never a generic or batch name (e.g. not `linkedin_posts_2026-09-05`); the filename becomes the Kindle email's attachment name.
-- When re-sending an item already delivered to Kindle, write `outputs/<name>_V2.epub`, then `_V3`, … (check `outputs/` for the next number; keep the `inputs/` name).
-- Several distinct sources in one request (e.g. multiple pasted links) → run the full pipeline per source: its own `inputs/<name>.md`, `outputs/<name>.epub`, and separate Kindle email. Never merge them, even if they share platform, date, or topic (e.g. never one combined file for unrelated LinkedIn posts).
+- When re-sending an item already delivered to Kindle, write `outputs/<name>_V2.<ext>`, then `_V3`, … (check `outputs/` for the next number; keep the `inputs/` name).
+- Several distinct sources in one request (e.g. multiple pasted links) → run the full pipeline per source: its own `inputs/<name>.md`, `outputs/<name>.epub`, and separate Kindle email. Never merge them, even if they share platform, date, or topic (e.g. never one combined file for unrelated LinkedIn posts). A post plus its linked article, or a combined document a skill defines, counts as one item.
 
 ## Send-to-Kindle delivery
 
 - Delivery logic lives only in `kindle_delivery.py`; conversion code must never import `smtplib`/`keyring` directly.
 - Never hardcode, log, print, or write the Gmail App Password anywhere—source, docs, tracebacks, or generated summaries.
 - The software itself auto-sends after a successful EPUB conversion; PDF is never auto-sent, even with `--send-to-kindle`. No hidden retries or deduplication: a rerun re-sends by design.
-- Suppress sending with `--no-send-to-kindle` only for conversions about the software itself (development/regression runs, the source-change summary doc below); any conversion the user actually asked for—article, social post, email, note, or other content—is a real delivery, so let it auto-send.
+- Suppress sending with `--no-send-to-kindle` only for conversions about the software itself (development/regression runs, the source-change summary doc below) or a scratchpad preview checked before the single real delivery run; any conversion the user actually asked for—article, social post, email, note, or other content—is a real delivery, so let it auto-send.
 
 ## Completion and source control
 
@@ -45,7 +45,7 @@ The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_
 
 ## Copyright-limited content (any source)
 
-- If full text can't be reproduced for copyright reasons and is summarized or truncated, the output document's very first line must say so, immediately followed by a verified, working, clickable link to the original source.
+- If full text can't be reproduced for copyright reasons and is summarized or truncated, the first content immediately after the document's `# Title` must be a bold notice saying so, immediately followed by a verified, working, clickable link to the original source.
 - Suffix both file names with `_summary` (`article_summary.md`, `article_summary.epub`).
 
 Keep this file at or below 150 lines; when adding a rule, merge or remove equivalent prose or move task-specific procedures to on-demand guidance.
