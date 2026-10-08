@@ -4603,6 +4603,8 @@ def main():
         except kindle_delivery.KindleDeliveryError as e:
             print(f"error: could not store credential: {e}", file=sys.stderr)
             sys.exit(1)
+        finally:
+            password = None  # keep it out of this frame's traceback locals
         print("Stored.")
         return
 
@@ -4659,7 +4661,7 @@ def main():
         else:
             output_format = args.output_format or "epub"
     else:
-        output_format = args.format or "epub"
+        output_format = args.output_format or "epub"
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         basename = os.path.splitext(os.path.basename(input_path))[0]
         output_path = os.path.join(OUTPUT_DIR, basename + (".pdf" if output_format == "pdf" else ".epub"))

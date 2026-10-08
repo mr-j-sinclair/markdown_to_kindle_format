@@ -275,6 +275,15 @@ set fails with a clear error rather than guessing an address.
   a clear message is printed to stderr, and the process exits with code
   `2` (distinct from exit `1`, reserved for conversion failure) so scripts
   can tell partial success apart from total failure.
+- Keyring and SMTP failures are reported as the error type plus, where
+  available, the numeric SMTP status code or OS error number -- never the
+  server's or keyring backend's own message text. These errors are raised
+  without a chained cause, and `kindle_delivery.py` clears its own copy of
+  the App Password before raising, so the password doesn't appear in the
+  printed error or in its traceback (even a locals-capturing one). Gmail's
+  SMTP codes distinguish the common cases (e.g. 535 = bad credentials,
+  534 = App Password required). An unexpected exception type outside those
+  keyring/SMTP errors still propagates unwrapped.
 - There are **no automatic retries and no duplicate-send protection** --
   a transient network failure is not silently retried (to avoid ever
   risking a duplicate Kindle document), and rerunning the command re-sends

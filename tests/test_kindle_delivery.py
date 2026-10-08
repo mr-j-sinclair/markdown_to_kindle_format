@@ -1,6 +1,8 @@
 import os
 import smtplib
 import sys
+import tempfile
+import traceback
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +14,7 @@ import kindle_delivery as kd
 import md_to_kindle
 
 DUMMY_PASSWORD = "s3cr3t-app-password"
+SENTINEL = "SENTINEL-pw-7f3a9c"
 
 
 class ShouldSendToKindleTests(unittest.TestCase):
@@ -200,6 +203,197 @@ class ConversionFailureMeansNoEmailTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 md_to_kindle.main()
             mock_send.assert_not_called()
+
+
+class NoPasswordLeakTests(unittest.TestCase):
+    """The App Password must never appear in a raised delivery error's
+    message, its (chained) traceback, or a locals-capturing traceback.
+
+    Exceptions are captured with an explicit try/except rather than
+    assertRaises: assertRaises calls traceback.clear_frames(), which wipes
+    frame locals and would make the captured-locals check vacuous.
+    """
+
+    def setUp(self):
+        fd, self.tmp_path = tempfile.mkstemp(suffix=".epub")
+        os.write(fd, b"fake epub bytes")
+        os.close(fd)
+        self.addCleanup(os.remove, self.tmp_path)
+
+    def _capture(self, fn, expected_type):
+        try:
+            fn()
+        except BaseException as exc:  # keep exc.__traceback__ frames intact
+            self.assertIsInstance(exc, expected_type)
+            return exc
+        self.fail(f"{expected_type.__name__} not raised")
+
+    def _assert_no_leak(self, exc):
+        self.assertNotIn(SENTINEL, str(exc))
+        self.assertNotIn(SENTINEL, repr(exc))
+        self.assertNotIn(SENTINEL, "".join(traceback.format_exception(exc)))
+        with_locals = "".join(traceback.TracebackException.from_exception(
+            exc, capture_locals=True).format())
+        self.assertNotIn(SENTINEL, with_locals)
+        self.assertIsNone(exc.__cause__)
+        self.assertIsNone(exc.__context__)
+
+    def _send(self, mock_smtp_ssl):
+        with patch.object(kd, "get_app_password", return_value=SENTINEL), \
+             patch.object(kd.smtplib, "SMTP_SSL", mock_smtp_ssl):
+            kd.send_to_kindle(self.tmp_path, sender_email="sender@example.com",
+                               dest_email="dest@kindle.com")
+
+    def _smtp_with_server(self, mock_server):
+        mock_smtp_ssl = MagicMock()
+        mock_smtp_ssl.return_value.__enter__.return_value = mock_server
+        return mock_smtp_ssl
+
+    def test_smtp_auth_error_never_leaks_password(self):
+        mock_server = MagicMock()
+        mock_server.login.side_effect = smtplib.SMTPAuthenticationError(
+            535, f"bad {SENTINEL}".encode())
+        exc = self._capture(lambda: self._send(self._smtp_with_server(mock_server)),
+                            kd.SmtpAuthError)
+        self._assert_no_leak(exc)
+        self.assertIn("SMTP 535", str(exc))
+
+    def test_smtp_other_error_never_leaks_password(self):
+        mock_server = MagicMock()
+        mock_server.send_message.side_effect = smtplib.SMTPDataError(550, SENTINEL.encode())
+        exc = self._capture(lambda: self._send(self._smtp_with_server(mock_server)),
+                            kd.SmtpConnectionError)
+        self._assert_no_leak(exc)
+        self.assertIn("SMTPDataError", str(exc))
+        self.assertIn("550", str(exc))
+
+    def test_non_integer_smtp_code_not_echoed(self):
+        mock_server = MagicMock()
+        mock_server.login.side_effect = smtplib.SMTPAuthenticationError(
+            SENTINEL.encode(), b"x")
+        exc = self._capture(lambda: self._send(self._smtp_with_server(mock_server)),
+                            kd.SmtpAuthError)
+        self._assert_no_leak(exc)
+
+    def test_oserror_strerror_not_echoed(self):
+        mock_smtp_ssl = MagicMock(side_effect=OSError(5, SENTINEL))
+        exc = self._capture(lambda: self._send(mock_smtp_ssl), kd.SmtpConnectionError)
+        self._assert_no_leak(exc)
+        self.assertIn("OSError", str(exc))
+        self.assertIn("errno 5", str(exc))
+
+    def test_oserror_reports_class_name(self):
+        mock_smtp_ssl = MagicMock(side_effect=TimeoutError("timed out"))
+        exc = self._capture(lambda: self._send(mock_smtp_ssl), kd.SmtpConnectionError)
+        self._assert_no_leak(exc)
+        self.assertIn("TimeoutError", str(exc))
+
+    def test_message_build_failure_before_smtp_never_leaks_password(self):
+        with patch.object(kd, "EmailMessage", side_effect=RuntimeError("boom")):
+            exc = self._capture(lambda: self._send(MagicMock()), RuntimeError)
+        with_locals = "".join(traceback.TracebackException.from_exception(
+            exc, capture_locals=True).format())
+        self.assertNotIn(SENTINEL, with_locals)
+
+    def test_set_app_password_never_leaks_password(self):
+        with patch.object(kd.keyring, "set_password",
+                           side_effect=keyring.errors.KeyringError(f"failed {SENTINEL}")):
+            exc = self._capture(lambda: kd.set_app_password(SENTINEL, "user@example.com"),
+                                kd.KeyringBackendError)
+        self._assert_no_leak(exc)
+        self.assertIn("KeyringError", str(exc))
+
+    def test_set_app_password_missing_config_never_leaks_password(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(kd.ENV_SENDER_EMAIL, None)
+            exc = self._capture(lambda: kd.set_app_password(SENTINEL),
+                                kd.MissingConfigError)
+        self._assert_no_leak(exc)
+
+    def test_get_app_password_backend_error_not_echoed(self):
+        with patch.object(kd.keyring, "get_password",
+                           side_effect=keyring.errors.KeyringError(SENTINEL)), \
+             patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(kd.ENV_APP_PASSWORD, None)
+            exc = self._capture(lambda: kd.get_app_password("user@example.com"),
+                                kd.KeyringBackendError)
+        self._assert_no_leak(exc)
+        self.assertIn("KeyringError", str(exc))
+
+    def test_clear_app_password_backend_error_not_echoed(self):
+        with patch.object(kd.keyring, "delete_password",
+                           side_effect=keyring.errors.KeyringError(SENTINEL)):
+            exc = self._capture(lambda: kd.clear_app_password("user@example.com"),
+                                kd.KeyringBackendError)
+        self._assert_no_leak(exc)
+        self.assertIn("KeyringError", str(exc))
+
+
+class SetKindlePasswordCliNoLeakTests(unittest.TestCase):
+    def test_store_failure_exit_never_leaks_password(self):
+        # Explicit try/except (not assertRaises, which clears frame locals).
+        # The real set_app_password runs (only the keyring backend is
+        # mocked), so the SystemExit's __context__ chain is the genuine one.
+        exc = None
+        with patch("getpass.getpass", return_value=SENTINEL), \
+             patch.dict(os.environ, {kd.ENV_SENDER_EMAIL: "sender@example.com"}), \
+             patch.object(kd.keyring, "set_password",
+                          side_effect=keyring.errors.KeyringError("store failed")), \
+             patch.object(sys, "argv", ["md_to_kindle.py", "--set-kindle-password"]):
+            try:
+                md_to_kindle.main()
+            except SystemExit as e:
+                exc = e
+        self.assertIsNotNone(exc, "SystemExit not raised")
+        self.assertEqual(exc.code, 1)
+        with_locals = "".join(traceback.TracebackException.from_exception(
+            exc, capture_locals=True).format())
+        self.assertNotIn(SENTINEL, with_locals)
+
+
+class CliNoOutputPathFormatTests(unittest.TestCase):
+    """main() with no OUTPUT must honour --output-format (not the --paste
+    --format flag) and auto-send EPUB output. Delivery is mocked."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.tmpdir, ignore_errors=True))
+        self.input_path = os.path.join(self.tmpdir, "x.md")
+        with open(self.input_path, "w") as f:
+            f.write("# hi\n")
+
+    def _run_main(self, *extra):
+        with patch.object(md_to_kindle, "OUTPUT_DIR", self.tmpdir), \
+             patch.object(md_to_kindle, "convert") as mock_convert, \
+             patch.object(kd, "send_to_kindle") as mock_send, \
+             patch.object(kd, "get_dest_email", return_value="dest@kindle.com"), \
+             patch.object(sys, "argv", ["md_to_kindle.py", self.input_path, *extra]):
+            md_to_kindle.main()
+        out_path = mock_convert.call_args.args[1]
+        return mock_convert.call_args.kwargs["output_format"], out_path, mock_send
+
+    def test_no_output_path_defaults_to_epub_and_sends(self):
+        fmt, out_path, mock_send = self._run_main()
+        self.assertEqual(fmt, "epub")
+        self.assertTrue(out_path.endswith(".epub"))
+        mock_send.assert_called_once_with(out_path)
+
+    def test_no_output_path_output_format_pdf(self):
+        fmt, out_path, mock_send = self._run_main("--output-format", "pdf")
+        self.assertEqual(fmt, "pdf")
+        self.assertTrue(out_path.endswith(".pdf"))
+        mock_send.assert_not_called()
+
+    def test_no_output_path_ignores_paste_format_flag(self):
+        fmt, out_path, mock_send = self._run_main("--format", "html")
+        self.assertEqual(fmt, "epub")
+        self.assertTrue(out_path.endswith(".epub"))
+        mock_send.assert_called_once_with(out_path)
+
+    def test_no_output_path_no_send_flag(self):
+        fmt, out_path, mock_send = self._run_main("--no-send-to-kindle")
+        self.assertEqual(fmt, "epub")
+        mock_send.assert_not_called()
 
 
 if __name__ == "__main__":

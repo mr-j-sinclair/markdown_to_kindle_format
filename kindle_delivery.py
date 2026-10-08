@@ -74,6 +74,23 @@ class UnsupportedFormatError(KindleDeliveryError):
     pass
 
 
+def _describe(exc):
+    """Diagnostic summary of exc: class name plus integer SMTP code / OS errno.
+
+    Deliberately never uses str(exc), strerror, or non-integer attribute
+    values: server- or backend-supplied text is outside our control and
+    could echo credential material.
+    """
+    parts = [type(exc).__name__]
+    smtp_code = getattr(exc, "smtp_code", None)
+    if isinstance(smtp_code, int):
+        parts.append(f"SMTP {smtp_code}")
+    errno_ = getattr(exc, "errno", None)
+    if isinstance(exc, OSError) and isinstance(errno_, int):
+        parts.append(f"errno {errno_}")
+    return ", ".join(parts)
+
+
 def get_sender_email():
     """Return the configured sender Gmail address, or raise MissingConfigError."""
     email = os.environ.get(ENV_SENDER_EMAIL)
@@ -114,7 +131,8 @@ def get_app_password(username=None):
 
     Resolution order: OS keyring, then the MD_TO_KINDLE_APP_PASSWORD
     environment variable. Never includes the credential value in any
-    raised exception message.
+    raised exception message, and never chains backend exceptions (whose
+    traceback frames could hold it).
     """
     username = username or get_sender_email()
     backend_error = None
@@ -122,7 +140,9 @@ def get_app_password(username=None):
     try:
         password = keyring.get_password(KEYRING_SERVICE, username)
     except keyring.errors.KeyringError as e:
-        backend_error = e
+        # Keep only the sanitized summary, not the exception object: a
+        # locals-capturing traceback would otherwise print its message.
+        backend_error = _describe(e)
 
     if password:
         return password
@@ -144,11 +164,23 @@ def get_app_password(username=None):
 
 def set_app_password(password, username=None):
     """Store the Gmail App Password in the OS keyring."""
-    username = username or get_sender_email()
+    error = None
     try:
-        keyring.set_password(KEYRING_SERVICE, username, password)
-    except keyring.errors.KeyringError as e:
-        raise KeyringBackendError(f"could not store credential in keyring: {e}") from e
+        username = username or get_sender_email()
+        try:
+            keyring.set_password(KEYRING_SERVICE, username, password)
+        except keyring.errors.KeyringError as e:
+            # Built here, raised below (outside the except block): no
+            # __cause__/__context__ linking back to the backend's frames,
+            # whose locals include the password.
+            error = KeyringBackendError(
+                f"could not store credential in keyring ({_describe(e)})")
+    finally:
+        # Covers every exit (including a missing-config error above), so
+        # this frame never holds the password in a propagating traceback.
+        password = None
+    if error is not None:
+        raise error
 
 
 def clear_app_password(username=None):
@@ -157,12 +189,16 @@ def clear_app_password(username=None):
     A no-op (not an error) if nothing was stored.
     """
     username = username or get_sender_email()
+    error = None
     try:
         keyring.delete_password(KEYRING_SERVICE, username)
     except keyring.errors.PasswordDeleteError:
         pass
     except keyring.errors.KeyringError as e:
-        raise KeyringBackendError(f"could not clear credential in keyring: {e}") from e
+        error = KeyringBackendError(
+            f"could not clear credential in keyring ({_describe(e)})")
+    if error is not None:
+        raise error
 
 
 def send_to_kindle(file_path, sender_email=None, dest_email=None):
@@ -184,7 +220,6 @@ def send_to_kindle(file_path, sender_email=None, dest_email=None):
 
     sender_email = sender_email or get_sender_email()
     dest_email = dest_email or get_dest_email()
-    password = get_app_password(sender_email)
 
     filename = os.path.basename(file_path)
     with open(file_path, "rb") as f:
@@ -197,11 +232,23 @@ def send_to_kindle(file_path, sender_email=None, dest_email=None):
     msg.set_content(f"Sent automatically by markdown_to_kindle_format: {filename}")
     msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
 
+    # Same pattern as set_app_password: fetch the password only now (so a
+    # file-read/message-build failure above never has it in this frame),
+    # clear it in `finally`, and raise after the except/finally so the
+    # error carries no chain into smtplib frames (SMTP.login's locals hold
+    # the password).
+    password = get_app_password(sender_email)
+    error = None
     try:
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
             server.login(sender_email, password)
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError as e:
-        raise SmtpAuthError(f"Gmail rejected the App Password: {e}") from e
-    except (smtplib.SMTPException, OSError, TimeoutError) as e:
-        raise SmtpConnectionError(f"could not send via {SMTP_HOST}:{SMTP_PORT}: {e}") from e
+        error = SmtpAuthError(f"Gmail rejected the App Password ({_describe(e)})")
+    except (smtplib.SMTPException, OSError) as e:  # TimeoutError is an OSError
+        error = SmtpConnectionError(
+            f"could not send via {SMTP_HOST}:{SMTP_PORT} ({_describe(e)})")
+    finally:
+        password = None
+    if error is not None:
+        raise error
