@@ -12,6 +12,8 @@ Before preparing or modifying any document content for this pipeline — normali
 
 For a church Order of Service / notices email, also invoke the `order-of-service` Skill (after `kindle-doc-prep`); it owns that document's format, responsive-reading type preservation, and web-fetched GNT readings.
 
+A request for the user's last/latest N LinkedIn posts means their LinkedIn *Saved* posts by default (even without "saved"); also invoke the `get-n-latest-linkedin-posts` Skill (after `kindle-doc-prep`).
+
 The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. Its cleaner may drop only boilerplate, repeated titles/labels, and empty content, and make structural/whitespace-only changes (headings, key-verse blockquotes); episode wording passes through verbatim. Its state lives on the `ntiy-state` branch; never commit it to `main`.
 
 ## Verification
