@@ -373,8 +373,14 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
     state but not independently verified.
   - Call C reviews the finished document plus the run's diagnostics.
     If it disagrees with a sourced claim, the sourced text stays as written
-    and its view appears as a labelled "AI reviewer note" under that section;
-    these notes are stored in state but are not counted as warnings.
+    and its view appears as a labelled "AI reviewer note" under that section,
+    with a link to the reviewer's own source. Call C has no tools; only on
+    days it disputes something does a follow-up "source check" call make one
+    web search to source the disagreements. A disagreement is shown only if
+    its URL matches a page that search returned, validated like call B's
+    sources; unsourced ones are dropped, as are all of them if the source
+    check fails. These notes are stored in state with their URL but are not
+    counted as warnings.
   - Table cells, numbers, years and links always come from code.
 - **Run check:** a failed source or model call degrades only its own section
   ("Unavailable today: ..."), and nothing is ever filled in from guesswork. A
@@ -390,9 +396,12 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
   success). Otherwise it failed, and `md_to_kindle.py`'s `1`/`2`/`3` are
   passed through.
 - **Secrets:** the three `MD_TO_KINDLE_*` secrets above, plus
-  `OPENAI_API_KEY`. Use a dedicated OpenAI project key with a low monthly
-  budget limit. Expected cost is about $0.014/day (around $5/year), mostly
-  call B's web search.
+  `OPENAI_API_KEY`. Use a dedicated OpenAI project key with a hard monthly
+  budget cap (this project uses $2/month). Realistic cost is about $6-9/year,
+  mostly web-search fees (call B, plus the source check on days call C
+  disputes something); occasional retries add a little. The cap is the ceiling: if
+  it is hit, the model calls fail, and the document is still sent with the
+  code-built facts and those sections marked unavailable.
 - **Manual runs:** in Actions -> "Daily Facts to Kindle" -> Run workflow.
   Tick `preview` to build today's EPUB as a downloadable artifact without
   sending it or touching state.

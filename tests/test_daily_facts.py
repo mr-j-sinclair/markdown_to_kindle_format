@@ -103,6 +103,19 @@ GOOD_B = {"topic_title": "Context rot", "concept": "Long contexts degrade recall
           "why_it_matters": ["It limits agent reliability."],
           "sources": [{"url": "https://example.com/Guide/Evals", "supports": "Recall degrades with length."}]}
 GOOD_C = {"status": "ok", "notes": [], "source_disagreements": []}
+REVIEWER_URL = "https://history.example/Golay-1949"   # a page the source check's search returned
+
+
+def with_disagreements(client, *disagreements, url=REVIEWER_URL, tool_calls=None, **extra):
+    """Make client's call C (no tools) record these (section, note)
+    disagreements, and its source check echo each one citing url; by
+    default the source check's search returned REVIEWER_URL."""
+    client.answers["run_check"] = [response(dict(GOOD_C, source_disagreements=[
+        {"section": s, "note": n} for s, n in disagreements], **extra), tool_calls=[])]
+    client.answers["source_check"] = [response({"source_disagreements": [
+        {"section": s, "note": n, "url": url} for s, n in disagreements]},
+        tool_calls=[search_call(REVIEWER_URL)] if tool_calls is None else tool_calls)]
+    return client
 
 
 class FakeClient:
@@ -469,10 +482,7 @@ class DegradationTests(Base):
             self.assertTrue(any("Prose writer (call A) failed twice" in d for d in facts.diagnostics))
 
     def flag_note_client(self):
-        client = good_client()
-        client.answers["run_check"] = [response(dict(GOOD_C, source_disagreements=[
-            {"section": "flag", "note": "Disputed."}]), tool_calls=[])]
-        return client
+        return with_disagreements(good_client(), ("flag", "Disputed."))
 
     def test_world_bank_down(self):
         routes = default_routes()
@@ -603,6 +613,24 @@ class LLMTests(Base):
         with self.assertRaises(df.LLMError):
             df.write_grounded_prose("Jamaica", "x", "Topic", "y", client=client)
 
+    def test_length_caps(self):
+        # Code caps sit deliberately above the prompt targets (70 / 100-140 / 120-170 words).
+        for field, cap in (("country_blurb", 95), ("research_body", 190)):
+            for words, ok in ((cap, True), (cap + 1, False)):
+                client = FakeClient({"grounded_prose": [response(dict(GOOD_A, **{field: "word " * words}),
+                                                                 tool_calls=[])]})
+                if ok:
+                    df.write_grounded_prose("Jamaica", "x", "Topic", "y", client=client)
+                else:
+                    with self.assertRaises(df.LLMError, msg=field):
+                        df.write_grounded_prose("Jamaica", "x", "Topic", "y", client=client)
+        self.assertEqual(len(self.lesson(dict(GOOD_B, concept="word " * 220))["concept"].split()), 220)
+        with self.assertRaises(df.LLMError):
+            self.lesson(dict(GOOD_B, concept="word " * 221))
+        for target in ("at most 70 words", "100-140 words"):
+            self.assertIn(target, df.GROUNDED_INSTRUCTIONS)
+        self.assertIn("concept: 120-170 words", df.AI_INSTRUCTIONS)
+
     def test_markup_rejected_in_every_llm_field(self):
         bad_values = ('<a href="//evil.example">x</a>', "See [a [b]](/path) here.", "![img](x.png)",
                       "Visit //evil.example today.", "<img src=x onerror=alert(1)>", "< script>",
@@ -708,17 +736,14 @@ class LLMTests(Base):
 # ---------- reviewer disagreements with sourced claims ----------
 
 HAMMING = "Golay published an error-correcting code in 1949, before Hamming's 1950 code."
-NOTE_SUFFIX = ("The text above follows its cited source; "
+NOTE_SUFFIX = (f"Reviewer's source: [history.example/Golay-1949]({REVIEWER_URL}). "
+               "The text above follows its cited source; "
                "this note is the AI reviewer's own view and may be wrong.")
 
 
 class DisagreementTests(Base):
-    def review_client(self, *disagreements, **extra):
-        client = good_client()
-        payload = dict(GOOD_C, source_disagreements=[{"section": s, "note": n} for s, n in disagreements],
-                       **extra)
-        client.answers["run_check"] = [response(payload, tool_calls=[])]
-        return client
+    def review_client(self, *disagreements, **kwargs):
+        return with_disagreements(good_client(), *disagreements, **kwargs)
 
     def test_note_rendered_after_its_section_with_prose_unchanged(self):
         sel, facts = self.gather()
@@ -732,8 +757,12 @@ class DisagreementTests(Base):
         # The sourced prose is untouched: removing the note gives back the plain body.
         self.assertIn(plain.split("## AI Engineering", 1)[0].split("## Research Fact", 1)[1].rstrip(), research)
         self.assertEqual(markdown.count("AI reviewer note"), 1)
-        self.assertEqual(disagreements, [{"section": "research", "note": HAMMING}])
+        self.assertEqual(disagreements, [{"section": "research", "note": HAMMING, "url": REVIEWER_URL}])
         self.assertEqual(warnings, [])
+        self.assertIn(REVIEWER_URL, df.allowed_links(sel, facts, disagreements))
+        df.check_links(markdown, df.allowed_links(sel, facts, disagreements))  # no exception
+        with self.assertRaises(df.UnsafeDocumentError):
+            df.check_links(markdown, df.allowed_links(sel, facts))
 
     def test_box_points_at_disagreements_without_counting_them(self):
         sel, facts = self.gather()
@@ -783,6 +812,108 @@ class DisagreementTests(Base):
             self.assertNotIn("AI reviewer note", markdown)
             self.assertEqual(disagreements, [])
 
+    def test_no_tools_and_no_source_check_without_disagreements(self):
+        client = good_client()
+        review = df.review_document("# doc", [], client=client)
+        self.assertEqual(review["source_disagreements"], [])
+        self.assertEqual(len(client.requests), 1)
+        for key in ("tools", "tool_choice", "max_tool_calls", "include", "timeout"):
+            self.assertNotIn(key, client.requests[0])
+
+    def test_source_check_runs_once_with_one_search(self):
+        client = self.review_client(("research", HAMMING), ("flag", "Disputed."))
+        review = df.review_document("# doc", [], client=client)
+        self.assertEqual([r["text"]["format"]["name"] for r in client.requests], ["run_check", "source_check"])
+        self.assertNotIn("tools", client.requests[0])
+        req = client.requests[1]
+        self.assertEqual(req["tools"], [{"type": "web_search"}])
+        self.assertEqual(req["tool_choice"], "required")
+        self.assertEqual(req["max_tool_calls"], 1)
+        self.assertEqual(req["include"], ["web_search_call.action.sources"])
+        self.assertEqual(req["timeout"], 120)
+        self.assertIn(HAMMING, req["input"])
+        self.assertIn("Disputed.", req["input"])
+        self.assertEqual(len(review["source_disagreements"]), 2)
+
+    def test_source_check_failure_drops_disagreements(self):
+        client = self.review_client(("research", HAMMING))
+        client.answers["source_check"] = [RuntimeError("down")]
+        sel, facts = self.gather()
+        facts.diagnostics.clear()
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            markdown, warnings, disagreements = df.build_document(sel, facts, client=client)
+        self.assertIn("source check failed", err.getvalue())
+        self.assertNotIn("AI reviewer note", markdown)
+        self.assertNotIn("Run check", markdown)  # not a diagnostic
+        self.assertEqual((warnings, disagreements, facts.diagnostics), ([], [], []))
+
+    def test_disagreement_only_warning_becomes_ok_when_all_dropped(self):
+        for answer in (RuntimeError("down"),                                   # source check fails
+                       response({"source_disagreements": []},                  # drops everything
+                                tool_calls=[search_call(REVIEWER_URL)])):
+            client = self.review_client(("research", HAMMING), status="warning")
+            client.answers["source_check"] = [answer]
+            sel, facts = self.gather()
+            facts.diagnostics.clear()
+            with contextlib.redirect_stderr(io.StringIO()):
+                markdown, warnings, disagreements = df.build_document(sel, facts, client=client)
+            self.assertNotIn("Run check", markdown)
+            self.assertEqual((warnings, disagreements), ([], []))
+
+    def test_real_notes_survive_dropped_disagreements(self):
+        client = self.review_client(("research", HAMMING), status="warning", notes=["UK value looks odd."])
+        client.answers["source_check"] = [RuntimeError("down")]
+        sel, facts = self.gather()
+        facts.diagnostics.clear()
+        with contextlib.redirect_stderr(io.StringIO()):
+            markdown, warnings, disagreements = df.build_document(sel, facts, client=client)
+        self.assertEqual(markdown.splitlines()[2], "> **Run check — warning:** UK value looks odd.")
+        self.assertEqual((warnings, disagreements), (["UK value looks odd."], []))
+
+    def test_empty_warning_without_disagreements_keeps_generic_warning(self):
+        client = good_client()
+        client.answers["run_check"] = [response(dict(GOOD_C, status="warning"), tool_calls=[])]
+        sel, facts = self.gather()
+        facts.diagnostics.clear()
+        markdown, warnings, _ = df.build_document(sel, facts, client=client)
+        self.assertEqual(markdown.splitlines()[2],
+                         "> **Run check — warning:** the reviewer flagged a problem but gave no details.")
+        self.assertEqual(warnings, ["Run check flagged a problem without details."])
+        self.assertEqual([r["text"]["format"]["name"] for r in client.requests], ["run_check"])  # no source check
+
+    def test_source_check_cannot_add_new_disagreements(self):
+        client = self.review_client(("research", HAMMING))
+        client.answers["source_check"] = [response({"source_disagreements": [
+            {"section": "research", "note": HAMMING, "url": REVIEWER_URL},
+            {"section": "ai", "note": "Something call C never said.", "url": REVIEWER_URL}]},
+            tool_calls=[search_call(REVIEWER_URL)])]
+        with contextlib.redirect_stderr(io.StringIO()):
+            review = df.review_document("# doc", [], client=client)
+        self.assertEqual([d["section"] for d in review["source_disagreements"]], ["research"])
+
+    def test_unsourced_disagreements_dropped(self):
+        for url, tool_calls in (("https://elsewhere.example/golay", None),  # not a tool URL
+                                ("", None),                                   # no url given
+                                (REVIEWER_URL, [])):                           # never searched
+            client = self.review_client(("research", HAMMING), url=url, tool_calls=tool_calls)
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                review = df.review_document("# doc", [], client=client)
+            self.assertEqual(review["source_disagreements"], [], msg=url)
+            self.assertIn("dropped reviewer disagreement", err.getvalue())
+            sel, facts = self.gather()
+            facts.diagnostics.clear()
+            with contextlib.redirect_stderr(io.StringIO()):
+                markdown, warnings, disagreements = df.build_document(sel, facts, client=client)
+            self.assertNotIn("AI reviewer note", markdown)
+            self.assertNotIn("Run check", markdown)  # dropped silently: not a diagnostic or failure
+            self.assertEqual((warnings, disagreements), ([], []))
+
+    def test_matched_url_is_rendered_from_tool_metadata(self):
+        client = self.review_client(("research", HAMMING), url="HTTPS://EXAMPLE.COM/Guide/Evals#x",
+                                    tool_calls=[search_call(TOOL_URL)])
+        review = df.review_document("# doc", [], client=client)
+        self.assertEqual(review["source_disagreements"][0]["url"], TOOL_URL)
+
     def test_schema_is_strict(self):
         client = good_client()
         df.review_document("# doc", [], client=client)
@@ -790,6 +921,11 @@ class DisagreementTests(Base):
         self.assertFalse(items["additionalProperties"])
         self.assertEqual(items["required"], ["section", "note"])
         self.assertEqual(items["properties"]["section"]["enum"], list(df.SECTION_NAMES))
+        client = self.review_client(("research", HAMMING))
+        df.review_document("# doc", [], client=client)
+        items = client.requests[1]["text"]["format"]["schema"]["properties"]["source_disagreements"]["items"]
+        self.assertFalse(items["additionalProperties"])
+        self.assertEqual(items["required"], ["section", "note", "url"])
 
     def test_disagreements_stored_in_state(self):
         state_path = os.path.join(self.tmp, "state.json")
@@ -798,7 +934,8 @@ class DisagreementTests(Base):
             df.main(["--date", "2026-10-10", "--state", state_path],
                     client=self.review_client(("research", HAMMING)))
         entry = df.load_state(state_path)["sent"]["2026-10-10"]
-        self.assertEqual(entry["reviewer_disagreements"], [{"section": "research", "note": HAMMING}])
+        self.assertEqual(entry["reviewer_disagreements"],
+                         [{"section": "research", "note": HAMMING, "url": REVIEWER_URL}])
         self.assertFalse(any(HAMMING in w for w in entry["warnings"]))
 
 

@@ -18,7 +18,9 @@ tool itself returned and are rendered from that tool metadata -- and
 call C reviews the rendered document plus the run's diagnostics and writes a
 short warning box when something looks wrong. Where call C disagrees with a
 sourced claim, the sourced prose stays as written and the reviewer's view is
-shown as a labelled note under that section.
+shown as a labelled note under that section -- but only when a follow-up
+"source check" call (made only on days call C disputes something) cites a
+page its own web search returned (validated like call B's sources).
 
 A failed source or model call degrades only its own section ("Unavailable
 today: ...") and is listed in the warning box; nothing is fabricated. The
@@ -425,11 +427,11 @@ Use ONLY facts stated in the source text supplied for each field. Never add
 facts, numbers, names or dates that are not in that text. British English,
 plain prose: no markdown, no links, no URLs.
 
-- country_blurb: two or three sentences (at most 90 words) on the country's
+- country_blurb: two or three sentences (at most 70 words) on the country's
   geography, from COUNTRY SOURCE.
 - research_headline: a short, intriguing headline (at most 12 words) for one
   interesting fact from RESEARCH SOURCE.
-- research_body: 120-180 words in two or three short paragraphs (separated
+- research_body: 100-140 words in two or three short paragraphs (separated
   by a blank line) explaining that fact, its background and why it is
   interesting, from RESEARCH SOURCE. If the source supports less, write less;
   never pad with outside knowledge.
@@ -454,7 +456,7 @@ def write_grounded_prose(country: str, country_extract: str, research_title: str
             "research_body": {"type": "string"}}),
     )
     _log_usage("call A", resp)
-    prose = _parse_output(resp, {"country_blurb": 120, "research_headline": 20, "research_body": 240})
+    prose = _parse_output(resp, {"country_blurb": 95, "research_headline": 20, "research_body": 190})
     required = ((["country_blurb"] if country_extract.strip() else [])
                 + (["research_headline", "research_body"] if research_extract.strip() else []))
     for key in required:
@@ -481,7 +483,7 @@ explain the idea and why it matters, not just a definition.
 Fields (British English, plain prose, no markdown, no links, no URLs, no
 citation markers in the first three):
 - topic_title: at most 8 words.
-- concept: 150-220 words; two or three short paragraphs separated by a blank
+- concept: 120-170 words; two or three short paragraphs separated by a blank
   line. Explain how it works and include a concrete example.
 - why_it_matters: one or two items, each a single sentence of at most 30 words.
 - sources: one to three web pages from your search results that support the
@@ -593,7 +595,7 @@ def write_ai_lesson(theme: dict, summary: str, recent_topics: list, client=None)
           f"({', '.join(f'{k}={v}' for k, v in sorted(actions.items())) or 'none'})", flush=True)
     if not actions:
         raise LLMError("no web search was made")
-    lesson = _parse_output(resp, {"topic_title": 14, "concept": 280, "why_it_matters": 50})
+    lesson = _parse_output(resp, {"topic_title": 14, "concept": 220, "why_it_matters": 50})
     if not 1 <= len(lesson["why_it_matters"]) <= 2:
         raise LLMError("why_it_matters must have 1-2 items")
     if not (lesson["topic_title"] and lesson["concept"] and all(lesson["why_it_matters"])):
@@ -631,8 +633,17 @@ wrong; otherwise "warning" with at most 3 notes of at most 25 words each.
 No links or URLs anywhere."""
 
 
+def _disagreement_schema(*fields) -> dict:
+    return {"type": "array", "items": {
+        "type": "object", "additionalProperties": False, "required": ["section", "note", *fields],
+        "properties": {"section": {"type": "string", "enum": list(SECTION_NAMES)},
+                       "note": {"type": "string"}, **{f: {"type": "string"} for f in fields}}}}
+
+
 def review_document(document: str, diagnostics: list, client=None) -> dict:
-    """Call C: a short "run check" over the whole rendered document."""
+    """Call C: a short "run check" over the whole rendered document. No
+    tools; any disagreements it records are then sourced by source_check()
+    and kept only if their url matches a URL that search tool returned."""
     client = client or _openai_client()
     diag = "\n".join(f"- {d}" for d in diagnostics) or "- (none)"
     resp = client.responses.create(
@@ -644,33 +655,99 @@ def review_document(document: str, diagnostics: list, client=None) -> dict:
         text=_json_format("run_check", {
             "status": {"type": "string", "enum": ["ok", "warning"]},
             "notes": {"type": "array", "items": {"type": "string"}},
-            "source_disagreements": {"type": "array", "items": {
-                "type": "object", "additionalProperties": False, "required": ["section", "note"],
-                "properties": {"section": {"type": "string", "enum": list(SECTION_NAMES)},
-                               "note": {"type": "string"}}}}}),
+            "source_disagreements": _disagreement_schema()}),
     )
     _log_usage("call C", resp)
     review = _parse_output(resp, {"notes": 40})
     review["notes"] = review["notes"][:3]
-    review["source_disagreements"] = validated_disagreements(review.get("source_disagreements"))
+    disagreements = validated_disagreements(review.get("source_disagreements"))
+    if disagreements:
+        try:
+            sourced = source_check(disagreements, client=client)
+        except Exception as e:
+            print(f"note: dropped {len(disagreements)} reviewer disagreement(s); source check failed "
+                  f"({_describe(e)})", file=sys.stderr)
+            sourced = []
+        if not sourced and not review["notes"]:
+            # The warning was only about now-dropped disagreements, so it is
+            # not a problem the reader needs flagged.
+            review["status"] = "ok"
+        disagreements = sourced
+    review["source_disagreements"] = disagreements
     return review
 
 
-def validated_disagreements(items) -> list:
-    """Call C's disagreements with sourced claims: known section, cleaned
-    note without links, at most 50 words; duplicates dropped, capped."""
+SOURCE_CHECK_INSTRUCTIONS = """\
+A reviewer disputes the statements below in a morning digest. For each
+disagreement, find a web page that supports the reviewer's view, using one
+web search for all of them. Return each disagreement with its section and
+note copied exactly as given, plus in "url" the exact url of a page from
+your search results that supports it. Prefer authoritative sources:
+official or government statistics, reference works, primary sources and
+established news organisations; avoid forums and user-generated sites.
+Leave out any disagreement your search does not support. No other text."""
+
+
+def source_check(disagreements: list, client=None) -> list:
+    """Follow-up to call C, made only when it disputes something: one web
+    search (at most one tool call for all notes) to source the
+    disagreements. Each kept item must repeat one of call C's notes and cite
+    a URL the search tool returned; the rest are dropped."""
+    client = client or _openai_client()
+    notes = "\n".join(f"- section: {d['section']}; note: {d['note']}" for d in disagreements)
+    resp = client.responses.create(
+        model=MODEL,
+        instructions=SOURCE_CHECK_INSTRUCTIONS,
+        input=f"DISAGREEMENTS:\n{notes}",
+        tools=[{"type": "web_search"}],
+        tool_choice="required",
+        max_tool_calls=1,
+        include=["web_search_call.action.sources"],
+        reasoning={"effort": "low"},
+        max_output_tokens=1200,
+        timeout=120,  # web search can take longer than the client's 60s default
+        text=_json_format("source_check", {"source_disagreements": _disagreement_schema("url")}),
+    )
+    _log_usage("source check", resp)
+    actions = search_actions(resp)
+    print(f"source check: web_search actions {sum(actions.values())} "
+          f"({', '.join(f'{k}={v}' for k, v in sorted(actions.items())) or 'none'})", flush=True)
+    sourced = validated_disagreements(_parse_output(resp, {}).get("source_disagreements"), tool_urls(resp))
+    asked = {(d["section"], d["note"].lower()) for d in disagreements}
+    for d in sourced:
+        if (d["section"], d["note"].lower()) not in asked:
+            print(f"note: dropped source-check item that is not one of call C's notes ({d['section']})",
+                  file=sys.stderr)
+    return [d for d in sourced if (d["section"], d["note"].lower()) in asked]
+
+
+def validated_disagreements(items, known: dict = None) -> list:
+    """Disagreements with sourced claims: known section, cleaned note
+    without links, at most 50 words; duplicates dropped, capped. With known
+    (the search tool's URLs, from source_check) each item also needs a url
+    matching one of them, rendered as the tool's original URL; unsourced
+    ones are dropped with a note on stderr."""
     if not isinstance(items, list):
         raise LLMError("source_disagreements missing")
     out, seen = [], set()
     for item in items:
         if not (isinstance(item, dict) and item.get("section") in SECTION_NAMES
-                and isinstance(item.get("note"), str)):
+                and isinstance(item.get("note"), str)
+                and (known is None or isinstance(item.get("url"), str))):
             raise LLMError("source disagreement malformed")
         note = _safe_text(item["note"], "source disagreement note", 50)
         key = (item["section"], note.lower())
-        if note and key not in seen:
+        if not note or key in seen:
+            continue
+        if known is None:
             seen.add(key)
             out.append({"section": item["section"], "note": note})
+        elif normalise_url(item["url"]) in known:
+            seen.add(key)
+            out.append({"section": item["section"], "note": note, "url": known[normalise_url(item["url"])]})
+        else:
+            print(f"note: dropped reviewer disagreement without a web-search source ({item['section']}): "
+                  f"{item['url'] or '(no url)'}", file=sys.stderr)
     return out[:MAX_DISAGREEMENTS]
 
 
@@ -826,10 +903,11 @@ def _unavailable(what: str) -> str:
     return f"{_UNAVAILABLE} {what}. See the run check above.*"
 
 
-def _reviewer_note(note: str) -> str:
+def _reviewer_note(note: str, url: str) -> str:
     if not note.endswith((".", "!", "?")):
         note += "."
-    return (f"> **AI reviewer note:** {note} The text above follows its cited source; "
+    return (f"> **AI reviewer note:** {note} Reviewer's source: [{link_label(url)}]({url}). "
+            f"The text above follows its cited source; "
             f"this note is the AI reviewer's own view and may be wrong.")
 
 
@@ -913,13 +991,14 @@ def render_sections(sel: Selection, facts: Facts) -> dict:
 
 
 def render_body(sel: Selection, facts: Facts, reviewer_notes: dict = None) -> str:
-    """The five sections. reviewer_notes ({section key: [note]}) adds call C's
-    disagreements after the section's sourced content, which is unchanged;
-    unavailable sections get none."""
+    """The five sections. reviewer_notes ({section key: [disagreement]}) adds
+    call C's disagreements after the section's sourced content, which is
+    unchanged; unavailable sections get none."""
     parts = []
     for key, text in render_sections(sel, facts).items():
         if _UNAVAILABLE not in text:
-            text += "".join(f"\n\n{_reviewer_note(n)}" for n in (reviewer_notes or {}).get(key, []))
+            text += "".join(f"\n\n{_reviewer_note(d['note'], d['url'])}"
+                            for d in (reviewer_notes or {}).get(key, []))
         parts.append(text)
     return "\n\n".join(parts)
 
@@ -954,8 +1033,9 @@ def assemble(date: datetime.date, box: str, body: str) -> str:
     return "\n\n".join(parts) + "\n"
 
 
-def allowed_links(sel: Selection, facts: Facts) -> set:
-    """Every link target code may put in the document."""
+def allowed_links(sel: Selection, facts: Facts, disagreements: list = ()) -> set:
+    """Every link target code may put in the document, including the
+    tool-validated sources of call C's disagreements."""
     allowed = {world_bank_url("SP.POP.TOTL", sel.country["cca2"])}
     if facts.flag_file:
         allowed.add(facts.flag_file)
@@ -964,6 +1044,7 @@ def allowed_links(sel: Selection, facts: Facts) -> set:
                    for econ, cca2 in ((facts.uk_econ, "GB"), (facts.jm_econ, "JM")) if econ)
     if facts.ai:
         allowed.update(src["url"] for src in facts.ai["sources"])
+    allowed.update(d["url"] for d in disagreements)
     return allowed
 
 
@@ -993,14 +1074,14 @@ def build_document(sel: Selection, facts: Facts, client=None):
                      if _UNAVAILABLE not in sections[d["section"]]]
     reviewer_notes = {}
     for d in disagreements:
-        reviewer_notes.setdefault(d["section"], []).append(d["note"])
+        reviewer_notes.setdefault(d["section"], []).append(d)
     body = render_body(sel, facts, reviewer_notes)
     box = run_check_box(review, facts.diagnostics, disagreements)
     warnings = list(review["notes"]) if review and review.get("status") == "warning" else []
     if review and review.get("status") == "warning" and not warnings and not disagreements:
         warnings = ["Run check flagged a problem without details."]
     document = assemble(sel.date, box, body)
-    check_links(document, allowed_links(sel, facts))
+    check_links(document, allowed_links(sel, facts, disagreements))
     return document, warnings + facts.diagnostics, disagreements
 
 
@@ -1044,7 +1125,8 @@ def state_record(sel: Selection, facts: Facts, warnings: list, disagreements: li
         "indicators": {"UK": facts.uk_econ["indicator"]["code"] if facts.uk_econ else None,
                        "JM": facts.jm_econ["indicator"]["code"] if facts.jm_econ else None},
         "warnings": warnings,
-        "reviewer_disagreements": [{"section": d["section"], "note": d["note"]} for d in disagreements],
+        "reviewer_disagreements": [{"section": d["section"], "note": d["note"], "url": d["url"]}
+                                   for d in disagreements],
     }
 
 
