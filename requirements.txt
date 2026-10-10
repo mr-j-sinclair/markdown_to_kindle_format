@@ -12,6 +12,8 @@ pymupdf
 pygments
 reportlab
 keyring
+# Daily Facts automation (daily_facts.py): grounded prose + run check via the Responses API
+openai
 # PROTOTYPE (Mermaid diagram image rendering) -- also requires the system
 # `dot` binary (`brew install graphviz`). Safe to delete this line to roll
 # back; the import in md_to_kindle.py is soft and degrades gracefully

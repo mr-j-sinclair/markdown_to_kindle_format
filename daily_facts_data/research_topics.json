@@ -1,0 +1,1155 @@
+{
+ "_note": "Research-fact catalogue for daily_facts.py, authored at build time and validated with `daily_facts.py --check-data`. One entry is picked per day (date-seeded permutation); its Wikipedia lead extract grounds the LLM-written fact. Editing mid-cycle reshuffles the rotation once.",
+ "topics": [
+  {
+   "category": "Science",
+   "display_title": "Quantum entanglement",
+   "wikipedia_title": "Quantum entanglement"
+  },
+  {
+   "category": "Science",
+   "display_title": "Entropy",
+   "wikipedia_title": "Entropy"
+  },
+  {
+   "category": "Science",
+   "display_title": "Special relativity",
+   "wikipedia_title": "Special relativity"
+  },
+  {
+   "category": "Science",
+   "display_title": "Dark matter",
+   "wikipedia_title": "Dark matter"
+  },
+  {
+   "category": "Science",
+   "display_title": "Cosmic microwave background",
+   "wikipedia_title": "Cosmic microwave background"
+  },
+  {
+   "category": "Science",
+   "display_title": "Neutron star",
+   "wikipedia_title": "Neutron star"
+  },
+  {
+   "category": "Science",
+   "display_title": "Higgs boson",
+   "wikipedia_title": "Higgs boson"
+  },
+  {
+   "category": "Science",
+   "display_title": "Superconductivity",
+   "wikipedia_title": "Superconductivity"
+  },
+  {
+   "category": "Science",
+   "display_title": "Plate tectonics",
+   "wikipedia_title": "Plate tectonics"
+  },
+  {
+   "category": "Science",
+   "display_title": "Carbon cycle",
+   "wikipedia_title": "Carbon cycle"
+  },
+  {
+   "category": "Science",
+   "display_title": "Milankovitch cycles",
+   "wikipedia_title": "Milankovitch cycles"
+  },
+  {
+   "category": "Science",
+   "display_title": "Photosynthesis",
+   "wikipedia_title": "Photosynthesis"
+  },
+  {
+   "category": "Science",
+   "display_title": "CRISPR gene editing",
+   "wikipedia_title": "CRISPR gene editing"
+  },
+  {
+   "category": "Science",
+   "display_title": "Mitochondria",
+   "wikipedia_title": "Mitochondria"
+  },
+  {
+   "category": "Science",
+   "display_title": "Horizontal gene transfer",
+   "wikipedia_title": "Horizontal gene transfer"
+  },
+  {
+   "category": "Science",
+   "display_title": "Epigenetics",
+   "wikipedia_title": "Epigenetics"
+  },
+  {
+   "category": "Science",
+   "display_title": "Tardigrade",
+   "wikipedia_title": "Tardigrade"
+  },
+  {
+   "category": "Science",
+   "display_title": "Mycorrhiza",
+   "wikipedia_title": "Mycorrhiza"
+  },
+  {
+   "category": "Science",
+   "display_title": "Placebo",
+   "wikipedia_title": "Placebo"
+  },
+  {
+   "category": "Science",
+   "display_title": "Antimicrobial resistance",
+   "wikipedia_title": "Antimicrobial resistance"
+  },
+  {
+   "category": "Science",
+   "display_title": "Prion",
+   "wikipedia_title": "Prion"
+  },
+  {
+   "category": "Science",
+   "display_title": "Circadian rhythm",
+   "wikipedia_title": "Circadian rhythm"
+  },
+  {
+   "category": "Science",
+   "display_title": "Neuroplasticity",
+   "wikipedia_title": "Neuroplasticity"
+  },
+  {
+   "category": "Science",
+   "display_title": "Great Oxidation Event",
+   "wikipedia_title": "Great Oxidation Event"
+  },
+  {
+   "category": "Science",
+   "display_title": "Cambrian explosion",
+   "wikipedia_title": "Cambrian explosion"
+  },
+  {
+   "category": "Science",
+   "display_title": "Speed of sound",
+   "wikipedia_title": "Speed of sound"
+  },
+  {
+   "category": "Science",
+   "display_title": "Doppler effect",
+   "wikipedia_title": "Doppler effect"
+  },
+  {
+   "category": "Science",
+   "display_title": "Half-life",
+   "wikipedia_title": "Half-life"
+  },
+  {
+   "category": "Science",
+   "display_title": "Periodic table",
+   "wikipedia_title": "Periodic table"
+  },
+  {
+   "category": "Science",
+   "display_title": "Haber process",
+   "wikipedia_title": "Haber process"
+  },
+  {
+   "category": "Science",
+   "display_title": "Chirality",
+   "wikipedia_title": "Chirality (chemistry)"
+  },
+  {
+   "category": "Science",
+   "display_title": "Catalysis",
+   "wikipedia_title": "Catalysis"
+  },
+  {
+   "category": "Science",
+   "display_title": "Benford's law",
+   "wikipedia_title": "Benford's law"
+  },
+  {
+   "category": "Science",
+   "display_title": "Fermi paradox",
+   "wikipedia_title": "Fermi paradox"
+  },
+  {
+   "category": "Science",
+   "display_title": "Exoplanet",
+   "wikipedia_title": "Exoplanet"
+  },
+  {
+   "category": "Science",
+   "display_title": "Tide",
+   "wikipedia_title": "Tide"
+  },
+  {
+   "category": "Science",
+   "display_title": "Coriolis force",
+   "wikipedia_title": "Coriolis force"
+  },
+  {
+   "category": "Science",
+   "display_title": "Ozone depletion",
+   "wikipedia_title": "Ozone depletion"
+  },
+  {
+   "category": "Science",
+   "display_title": "Permafrost",
+   "wikipedia_title": "Permafrost"
+  },
+  {
+   "category": "Science",
+   "display_title": "Gut microbiota",
+   "wikipedia_title": "Gut microbiota"
+  },
+  {
+   "category": "Science",
+   "display_title": "Vaccine",
+   "wikipedia_title": "Vaccine"
+  },
+  {
+   "category": "Science",
+   "display_title": "Penicillin",
+   "wikipedia_title": "Penicillin"
+  },
+  {
+   "category": "Science",
+   "display_title": "Double-slit experiment",
+   "wikipedia_title": "Double-slit experiment"
+  },
+  {
+   "category": "Science",
+   "display_title": "Absolute zero",
+   "wikipedia_title": "Absolute zero"
+  },
+  {
+   "category": "Science",
+   "display_title": "Brownian motion",
+   "wikipedia_title": "Brownian motion"
+  },
+  {
+   "category": "Science",
+   "display_title": "Radiocarbon dating",
+   "wikipedia_title": "Radiocarbon dating"
+  },
+  {
+   "category": "Science",
+   "display_title": "Lagrange point",
+   "wikipedia_title": "Lagrange point"
+  },
+  {
+   "category": "Science",
+   "display_title": "Gravitational wave",
+   "wikipedia_title": "Gravitational wave"
+  },
+  {
+   "category": "Science",
+   "display_title": "Sickle cell disease",
+   "wikipedia_title": "Sickle cell disease"
+  },
+  {
+   "category": "Science",
+   "display_title": "Endosymbiont",
+   "wikipedia_title": "Endosymbiont"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Prime number",
+   "wikipedia_title": "Prime number"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Riemann hypothesis",
+   "wikipedia_title": "Riemann hypothesis"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Gödel's incompleteness theorems",
+   "wikipedia_title": "Gödel's incompleteness theorems"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Bayes' theorem",
+   "wikipedia_title": "Bayes' theorem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Central limit theorem",
+   "wikipedia_title": "Central limit theorem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Monty Hall problem",
+   "wikipedia_title": "Monty Hall problem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Birthday problem",
+   "wikipedia_title": "Birthday problem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Fibonacci sequence",
+   "wikipedia_title": "Fibonacci sequence"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Golden ratio",
+   "wikipedia_title": "Golden ratio"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Euler's identity",
+   "wikipedia_title": "Euler's identity"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Fourier transform",
+   "wikipedia_title": "Fourier transform"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Game theory",
+   "wikipedia_title": "Game theory"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Nash equilibrium",
+   "wikipedia_title": "Nash equilibrium"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Prisoner's dilemma",
+   "wikipedia_title": "Prisoner's dilemma"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Graph theory",
+   "wikipedia_title": "Graph theory"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Seven Bridges of Königsberg",
+   "wikipedia_title": "Seven Bridges of Königsberg"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Four color theorem",
+   "wikipedia_title": "Four color theorem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "P versus NP problem",
+   "wikipedia_title": "P versus NP problem"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Fractal",
+   "wikipedia_title": "Fractal"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Chaos theory",
+   "wikipedia_title": "Chaos theory"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Simpson's paradox",
+   "wikipedia_title": "Simpson's paradox"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Law of large numbers",
+   "wikipedia_title": "Law of large numbers"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Pi",
+   "wikipedia_title": "Pi"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Infinity",
+   "wikipedia_title": "Infinity"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Cantor's diagonal argument",
+   "wikipedia_title": "Cantor's diagonal argument"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Zeno's paradoxes",
+   "wikipedia_title": "Zeno's paradoxes"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Markov chain",
+   "wikipedia_title": "Markov chain"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Regression toward the mean",
+   "wikipedia_title": "Regression toward the mean"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Public-key cryptography",
+   "wikipedia_title": "Public-key cryptography"
+  },
+  {
+   "category": "Mathematics",
+   "display_title": "Halting problem",
+   "wikipedia_title": "Halting problem"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Comparative advantage",
+   "wikipedia_title": "Comparative advantage"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Opportunity cost",
+   "wikipedia_title": "Opportunity cost"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Inflation",
+   "wikipedia_title": "Inflation"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Hyperinflation in the Weimar Republic",
+   "wikipedia_title": "Hyperinflation in the Weimar Republic"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Stagflation",
+   "wikipedia_title": "Stagflation"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Phillips curve",
+   "wikipedia_title": "Phillips curve"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Quantitative easing",
+   "wikipedia_title": "Quantitative easing"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Gross domestic product",
+   "wikipedia_title": "Gross domestic product"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Purchasing power parity",
+   "wikipedia_title": "Purchasing power parity"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Big Mac Index",
+   "wikipedia_title": "Big Mac Index"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Gini coefficient",
+   "wikipedia_title": "Gini coefficient"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Tragedy of the commons",
+   "wikipedia_title": "Tragedy of the commons"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Externality",
+   "wikipedia_title": "Externality"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Moral hazard",
+   "wikipedia_title": "Moral hazard"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Adverse selection",
+   "wikipedia_title": "Adverse selection"
+  },
+  {
+   "category": "Economics",
+   "display_title": "The Market for Lemons",
+   "wikipedia_title": "The Market for Lemons"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Keynesian economics",
+   "wikipedia_title": "Keynesian economics"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Monetarism",
+   "wikipedia_title": "Monetarism"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Bretton Woods system",
+   "wikipedia_title": "Bretton Woods system"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Gold standard",
+   "wikipedia_title": "Gold standard"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Dutch disease",
+   "wikipedia_title": "Dutch disease"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Laffer curve",
+   "wikipedia_title": "Laffer curve"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Pareto efficiency",
+   "wikipedia_title": "Pareto efficiency"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Behavioral economics",
+   "wikipedia_title": "Behavioral economics"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Prospect theory",
+   "wikipedia_title": "Prospect theory"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Paradox of thrift",
+   "wikipedia_title": "Paradox of thrift"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Creative destruction",
+   "wikipedia_title": "Creative destruction"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Baumol effect",
+   "wikipedia_title": "Baumol effect"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Jevons paradox",
+   "wikipedia_title": "Jevons paradox"
+  },
+  {
+   "category": "Economics",
+   "display_title": "Okun's law",
+   "wikipedia_title": "Okun's law"
+  },
+  {
+   "category": "Business",
+   "display_title": "Dutch East India Company",
+   "wikipedia_title": "Dutch East India Company"
+  },
+  {
+   "category": "Business",
+   "display_title": "Joint-stock company",
+   "wikipedia_title": "Joint-stock company"
+  },
+  {
+   "category": "Business",
+   "display_title": "Limited liability",
+   "wikipedia_title": "Limited liability"
+  },
+  {
+   "category": "Business",
+   "display_title": "Double-entry bookkeeping",
+   "wikipedia_title": "Double-entry bookkeeping"
+  },
+  {
+   "category": "Business",
+   "display_title": "Toyota Production System",
+   "wikipedia_title": "Toyota Production System"
+  },
+  {
+   "category": "Business",
+   "display_title": "Lean manufacturing",
+   "wikipedia_title": "Lean manufacturing"
+  },
+  {
+   "category": "Business",
+   "display_title": "Kaizen",
+   "wikipedia_title": "Kaizen"
+  },
+  {
+   "category": "Business",
+   "display_title": "Network effect",
+   "wikipedia_title": "Network effect"
+  },
+  {
+   "category": "Business",
+   "display_title": "Economies of scale",
+   "wikipedia_title": "Economies of scale"
+  },
+  {
+   "category": "Business",
+   "display_title": "Disruptive innovation",
+   "wikipedia_title": "Disruptive innovation"
+  },
+  {
+   "category": "Business",
+   "display_title": "Porter's five forces analysis",
+   "wikipedia_title": "Porter's five forces analysis"
+  },
+  {
+   "category": "Business",
+   "display_title": "SWOT analysis",
+   "wikipedia_title": "SWOT analysis"
+  },
+  {
+   "category": "Business",
+   "display_title": "Venture capital",
+   "wikipedia_title": "Venture capital"
+  },
+  {
+   "category": "Business",
+   "display_title": "Initial public offering",
+   "wikipedia_title": "Initial public offering"
+  },
+  {
+   "category": "Business",
+   "display_title": "Leveraged buyout",
+   "wikipedia_title": "Leveraged buyout"
+  },
+  {
+   "category": "Business",
+   "display_title": "Brand",
+   "wikipedia_title": "Brand"
+  },
+  {
+   "category": "Business",
+   "display_title": "Planned obsolescence",
+   "wikipedia_title": "Planned obsolescence"
+  },
+  {
+   "category": "Business",
+   "display_title": "Containerization",
+   "wikipedia_title": "Containerization"
+  },
+  {
+   "category": "Business",
+   "display_title": "Barcode",
+   "wikipedia_title": "Barcode"
+  },
+  {
+   "category": "Business",
+   "display_title": "Franchising",
+   "wikipedia_title": "Franchising"
+  },
+  {
+   "category": "Business",
+   "display_title": "Supply chain",
+   "wikipedia_title": "Supply chain"
+  },
+  {
+   "category": "Business",
+   "display_title": "Lean startup",
+   "wikipedia_title": "Lean startup"
+  },
+  {
+   "category": "Business",
+   "display_title": "Goodhart's law",
+   "wikipedia_title": "Goodhart's law"
+  },
+  {
+   "category": "Business",
+   "display_title": "Peter principle",
+   "wikipedia_title": "Peter principle"
+  },
+  {
+   "category": "Business",
+   "display_title": "Conway's law",
+   "wikipedia_title": "Conway's law"
+  },
+  {
+   "category": "Business",
+   "display_title": "Dunning–Kruger effect",
+   "wikipedia_title": "Dunning–Kruger effect"
+  },
+  {
+   "category": "Business",
+   "display_title": "Sunk cost",
+   "wikipedia_title": "Sunk cost"
+  },
+  {
+   "category": "Business",
+   "display_title": "Tulip mania",
+   "wikipedia_title": "Tulip mania"
+  },
+  {
+   "category": "Business",
+   "display_title": "South Sea Company",
+   "wikipedia_title": "South Sea Company"
+  },
+  {
+   "category": "Business",
+   "display_title": "Enron scandal",
+   "wikipedia_title": "Enron scandal"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Transistor",
+   "wikipedia_title": "Transistor"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Moore's law",
+   "wikipedia_title": "Moore's law"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Integrated circuit",
+   "wikipedia_title": "Integrated circuit"
+  },
+  {
+   "category": "Technology",
+   "display_title": "ARPANET",
+   "wikipedia_title": "ARPANET"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Internet protocol suite",
+   "wikipedia_title": "Internet protocol suite"
+  },
+  {
+   "category": "Technology",
+   "display_title": "World Wide Web",
+   "wikipedia_title": "World Wide Web"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Turing machine",
+   "wikipedia_title": "Turing machine"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Alan Turing",
+   "wikipedia_title": "Alan Turing"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Von Neumann architecture",
+   "wikipedia_title": "Von Neumann architecture"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Compiler",
+   "wikipedia_title": "Compiler"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Open-source software",
+   "wikipedia_title": "Open-source software"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Linux",
+   "wikipedia_title": "Linux"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Git",
+   "wikipedia_title": "Git"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Hash function",
+   "wikipedia_title": "Hash function"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Blockchain",
+   "wikipedia_title": "Blockchain"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Neural network",
+   "wikipedia_title": "Neural network (machine learning)"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Backpropagation",
+   "wikipedia_title": "Backpropagation"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Transformer",
+   "wikipedia_title": "Transformer (deep learning)"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Large language model",
+   "wikipedia_title": "Large language model"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Reinforcement learning",
+   "wikipedia_title": "Reinforcement learning"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Global Positioning System",
+   "wikipedia_title": "Global Positioning System"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Lithium-ion battery",
+   "wikipedia_title": "Lithium-ion battery"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Solar cell",
+   "wikipedia_title": "Solar cell"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Nuclear fission",
+   "wikipedia_title": "Nuclear fission"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Printing press",
+   "wikipedia_title": "Printing press"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Steam engine",
+   "wikipedia_title": "Steam engine"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Telegraphy",
+   "wikipedia_title": "Telegraphy"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Fiber-optic communication",
+   "wikipedia_title": "Fiber-optic communication"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Error correction code",
+   "wikipedia_title": "Error correction code"
+  },
+  {
+   "category": "Technology",
+   "display_title": "Year 2000 problem",
+   "wikipedia_title": "Year 2000 problem"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Dunbar's number",
+   "wikipedia_title": "Dunbar's number"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Cultural relativism",
+   "wikipedia_title": "Cultural relativism"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Kinship",
+   "wikipedia_title": "Kinship"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Gift economy",
+   "wikipedia_title": "Gift economy"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Potlatch",
+   "wikipedia_title": "Potlatch"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Kula ring",
+   "wikipedia_title": "Kula ring"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Rite of passage",
+   "wikipedia_title": "Rite of passage"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Ethnography",
+   "wikipedia_title": "Ethnography"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Neolithic Revolution",
+   "wikipedia_title": "Neolithic Revolution"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Recent African origin of modern humans",
+   "wikipedia_title": "Recent African origin of modern humans"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Homo naledi",
+   "wikipedia_title": "Homo naledi"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Neanderthal",
+   "wikipedia_title": "Neanderthal"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Göbekli Tepe",
+   "wikipedia_title": "Göbekli Tepe"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Linguistic relativity",
+   "wikipedia_title": "Linguistic relativity"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Proto-Indo-European language",
+   "wikipedia_title": "Proto-Indo-European language"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Writing system",
+   "wikipedia_title": "Writing system"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Domestication",
+   "wikipedia_title": "Domestication"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Hunter-gatherer",
+   "wikipedia_title": "Hunter-gatherer"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Cognitive dissonance",
+   "wikipedia_title": "Cognitive dissonance"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Confirmation bias",
+   "wikipedia_title": "Confirmation bias"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Milgram experiment",
+   "wikipedia_title": "Milgram experiment"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Stanford prison experiment",
+   "wikipedia_title": "Stanford prison experiment"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Bystander effect",
+   "wikipedia_title": "Bystander effect"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Stanford marshmallow experiment",
+   "wikipedia_title": "Stanford marshmallow experiment"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Maslow's hierarchy of needs",
+   "wikipedia_title": "Maslow's hierarchy of needs"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Wisdom of the crowd",
+   "wikipedia_title": "Wisdom of the crowd"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Social proof",
+   "wikipedia_title": "Social proof"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Pareto principle",
+   "wikipedia_title": "Pareto principle"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Lindy effect",
+   "wikipedia_title": "Lindy effect"
+  },
+  {
+   "category": "Anthropology and human behaviour",
+   "display_title": "Ritual",
+   "wikipedia_title": "Ritual"
+  },
+  {
+   "category": "History",
+   "display_title": "Code of Hammurabi",
+   "wikipedia_title": "Code of Hammurabi"
+  },
+  {
+   "category": "History",
+   "display_title": "Library of Alexandria",
+   "wikipedia_title": "Library of Alexandria"
+  },
+  {
+   "category": "History",
+   "display_title": "Silk Road",
+   "wikipedia_title": "Silk Road"
+  },
+  {
+   "category": "History",
+   "display_title": "Black Death",
+   "wikipedia_title": "Black Death"
+  },
+  {
+   "category": "History",
+   "display_title": "Magna Carta",
+   "wikipedia_title": "Magna Carta"
+  },
+  {
+   "category": "History",
+   "display_title": "Gutenberg Bible",
+   "wikipedia_title": "Gutenberg Bible"
+  },
+  {
+   "category": "History",
+   "display_title": "Columbian exchange",
+   "wikipedia_title": "Columbian exchange"
+  },
+  {
+   "category": "History",
+   "display_title": "Atlantic slave trade",
+   "wikipedia_title": "Atlantic slave trade"
+  },
+  {
+   "category": "History",
+   "display_title": "Morant Bay rebellion",
+   "wikipedia_title": "Morant Bay rebellion"
+  },
+  {
+   "category": "History",
+   "display_title": "HMT Empire Windrush",
+   "wikipedia_title": "HMT Empire Windrush"
+  },
+  {
+   "category": "History",
+   "display_title": "Glorious Revolution",
+   "wikipedia_title": "Glorious Revolution"
+  },
+  {
+   "category": "History",
+   "display_title": "Industrial Revolution",
+   "wikipedia_title": "Industrial Revolution"
+  },
+  {
+   "category": "History",
+   "display_title": "Luddites",
+   "wikipedia_title": "Luddites"
+  },
+  {
+   "category": "History",
+   "display_title": "Bank of England",
+   "wikipedia_title": "Bank of England"
+  },
+  {
+   "category": "History",
+   "display_title": "Great Depression",
+   "wikipedia_title": "Great Depression"
+  },
+  {
+   "category": "History",
+   "display_title": "Marshall Plan",
+   "wikipedia_title": "Marshall Plan"
+  },
+  {
+   "category": "History",
+   "display_title": "Bretton Woods Conference",
+   "wikipedia_title": "Bretton Woods Conference"
+  },
+  {
+   "category": "History",
+   "display_title": "Bletchley Park",
+   "wikipedia_title": "Bletchley Park"
+  },
+  {
+   "category": "History",
+   "display_title": "Manhattan Project",
+   "wikipedia_title": "Manhattan Project"
+  },
+  {
+   "category": "History",
+   "display_title": "Apollo 11",
+   "wikipedia_title": "Apollo 11"
+  },
+  {
+   "category": "History",
+   "display_title": "Fall of the Berlin Wall",
+   "wikipedia_title": "Fall of the Berlin Wall"
+  },
+  {
+   "category": "History",
+   "display_title": "Partition of India",
+   "wikipedia_title": "Partition of India"
+  },
+  {
+   "category": "History",
+   "display_title": "Haitian Revolution",
+   "wikipedia_title": "Haitian Revolution"
+  },
+  {
+   "category": "History",
+   "display_title": "Meiji Restoration",
+   "wikipedia_title": "Meiji Restoration"
+  },
+  {
+   "category": "History",
+   "display_title": "Great Stink",
+   "wikipedia_title": "Great Stink"
+  },
+  {
+   "category": "History",
+   "display_title": "1854 Broad Street cholera outbreak",
+   "wikipedia_title": "1854 Broad Street cholera outbreak"
+  },
+  {
+   "category": "History",
+   "display_title": "Domesday Book",
+   "wikipedia_title": "Domesday Book"
+  },
+  {
+   "category": "History",
+   "display_title": "Rosetta Stone",
+   "wikipedia_title": "Rosetta Stone"
+  },
+  {
+   "category": "History",
+   "display_title": "Antikythera mechanism",
+   "wikipedia_title": "Antikythera mechanism"
+  },
+  {
+   "category": "History",
+   "display_title": "Peace of Westphalia",
+   "wikipedia_title": "Peace of Westphalia"
+  }
+ ]
+}

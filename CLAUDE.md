@@ -16,6 +16,8 @@ A request for the user's last/latest N LinkedIn posts means their LinkedIn *Save
 
 The New Testament in a Year automation (`ntiy_feed.py`, `.github/workflows/ntiy_daily.yml`) is deterministic code with no Claude in the loop, so the Skill rule doesn't apply to its runs. Its cleaner may drop only boilerplate, repeated titles/labels, and empty content, and make structural/whitespace-only changes (headings, key-verse blockquotes); episode wording passes through verbatim. Its state lives on the `ntiy-state` branch; never commit it to `main`.
 
+The Daily Facts automation (`daily_facts.py`, `.github/workflows/daily_facts.yml`) is likewise unattended code, so the Skill rule doesn't apply to its runs. Its OpenAI calls may only write prose grounded in supplied text or their own web-search results; tables, numbers and years come from code, and links are code-built or model-selected sources validated against the web-search tool's own URLs (never model-typed URLs rendered as-is). Its state lives on the `daily-facts-state` branch; never commit it to `main`.
+
 ## Verification
 
 - Sub-agent checks: before spawning a sub-agent to verify an edited diagram or other structural change against its original, snapshot the untouched file to the session scratchpad first — before any Edit call touches the real file — then give the verifier (fork or fresh) both the snapshot and the edited file to read itself; never a paraphrase pasted into the prompt. An exhaustive entity-by-entity audit is unnecessary — confirm the general spirit/shape matches and nothing important is conceptually wrong or missing.

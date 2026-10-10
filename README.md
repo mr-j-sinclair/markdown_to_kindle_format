@@ -333,6 +333,79 @@ cron (every 6h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
 .venv/bin/python3 ntiy_feed.py --seed --state ntiy_state.json        # first-time state (marks all as done)
 ```
 
+## Daily Facts automation
+
+`daily_facts.py` plus `.github/workflows/daily_facts.yml` email a short
+morning document, `daily_facts_YYYY-MM-DD.epub`, to your Kindle at 02:50 UK
+time every day. It has five sections: Flag of the Day, Research Fact, AI
+Engineering topic, UK Economy, and Jamaica Economy. It is separate from the
+NTIY automation: its own workflow, concurrency group and state branch.
+
+```text
+cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
+           -> md_to_kindle.py (EPUB + Send to Kindle) -> record date on daily-facts-state
+```
+
+- **Selection:** the country, research topic, AI theme and UK/Jamaica
+  indicators are date-seeded permutations over the lists in
+  `daily_facts_data/`. The same date always gives the same picks, and every
+  item is used once before any repeats. Editing a list reshuffles its
+  rotation once.
+- **Sources:** the country details come from `countries.json` (193 UN
+  members, trimmed from [mledoze/countries](https://github.com/mledoze/countries),
+  ODbL). Population and economy figures come from the
+  [World Bank API](https://data.worldbank.org/), and the population comparison
+  uses the newest year both countries have. Flags come from
+  [flagcdn](https://flagcdn.com/) and are embedded locally. Article
+  summaries come from the Wikipedia REST API. None of these needs a key.
+- **LLM boundary** (`gpt-6-luna`, OpenAI Responses API):
+  - Call A turns the Wikipedia extracts into the country blurb and the
+    research fact.
+  - Call B picks a specific topic in today's AI theme. It must use web
+    search, at most twice, and it is told to prefer primary sources. It
+    avoids the last 60 delivered topics. It names its sources in a separate
+    field, and they are **model-selected, validated against tool-owned
+    URLs**: a source is kept only if it matches a page the search tool
+    returned or opened. The match lowercases the scheme and host and drops
+    the fragment and tracking parameters. The rendered link is the tool's
+    own URL. If nothing matches, the section is marked unavailable. The
+    model's "supports" note for each source is its own attribution, stored in
+    state but not independently verified.
+  - Call C reviews the finished document plus the run's diagnostics.
+    If it disagrees with a sourced claim, the sourced text stays as written
+    and its view appears as a labelled "AI reviewer note" under that section;
+    these notes are stored in state but are not counted as warnings.
+  - Table cells, numbers, years and links always come from code.
+- **Run check:** a failed source or model call degrades only its own section
+  ("Unavailable today: ..."), and nothing is ever filled in from guesswork. A
+  warning box under the title then lists call C's notes and the raw
+  diagnostics. If call C itself fails, the raw diagnostics still appear. A
+  document sent with warnings is recorded as sent, the warnings are saved in
+  state, and the run shows a `::warning::` annotation.
+- **Idempotency:** `daily_facts_state.json` on the `daily-facts-state` branch
+  records each sent date only after `md_to_kindle.py` exits `0`. The
+  already-sent check runs before any network or model call, so it costs
+  nothing. Delivery is at-least-once, as with NTIY.
+- **Exit codes:** `0` sent, `10` already sent (the workflow treats it as
+  success). Otherwise it failed, and `md_to_kindle.py`'s `1`/`2`/`3` are
+  passed through.
+- **Secrets:** the three `MD_TO_KINDLE_*` secrets above, plus
+  `OPENAI_API_KEY`. Use a dedicated OpenAI project key with a low monthly
+  budget limit. Expected cost is about $0.014/day (around $5/year), mostly
+  call B's web search.
+- **Manual runs:** in Actions -> "Daily Facts to Kindle" -> Run workflow.
+  Tick `preview` to build today's EPUB as a downloadable artifact without
+  sending it or touching state.
+- **Force a resend:** delete the date from `daily_facts_state.json` on the
+  `daily-facts-state` branch, then run the workflow.
+- **Local use:**
+
+```bash
+.venv/bin/python3 daily_facts.py --dry-run --date 2026-10-10   # Markdown only -> inputs/
+.venv/bin/python3 daily_facts.py --preview                     # today's EPUB -> outputs/, no send
+.venv/bin/python3 daily_facts.py --check-data                  # validate catalogues against Wikipedia
+```
+
 ## Mermaid diagrams
 
 Fenced ` ```mermaid ` code blocks are rendered to embedded colour images

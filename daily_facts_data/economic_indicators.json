@@ -1,0 +1,20 @@
+{
+ "_note": "World Bank indicator codes rotated by daily_facts.py (date-seeded permutation, separate seeds for the UK and Jamaica). Editing this list mid-cycle reshuffles the rotation once. format: usd | pct | count.",
+ "indicators": [
+  {"code": "NY.GDP.MKTP.CD", "label": "GDP (current US$)", "format": "usd", "meaning": "The total market value of everything the economy produced in a year, converted to US dollars at market exchange rates."},
+  {"code": "NY.GDP.MKTP.KD.ZG", "label": "GDP growth (annual %)", "format": "pct", "meaning": "How much the economy grew in real terms, i.e. after stripping out inflation."},
+  {"code": "NY.GDP.PCAP.CD", "label": "GDP per capita (current US$)", "format": "usd", "meaning": "Output per person: a rough gauge of average living standards, before adjusting for local prices."},
+  {"code": "NY.GNP.PCAP.PP.CD", "label": "GNI per capita, PPP (current international $)", "format": "usd", "meaning": "Income per person adjusted for what money actually buys locally (purchasing power parity), so countries compare more fairly."},
+  {"code": "FP.CPI.TOTL.ZG", "label": "Consumer price inflation (annual %)", "format": "pct", "meaning": "How fast the prices of a typical household basket of goods and services rose over the year."},
+  {"code": "SL.UEM.TOTL.ZS", "label": "Unemployment (% of labour force, ILO modelled estimate)", "format": "pct", "meaning": "The share of people available for and seeking work who don't have a job."},
+  {"code": "SL.TLF.CACT.ZS", "label": "Labour force participation (% of population 15+, ILO modelled estimate)", "format": "pct", "meaning": "The share of adults who are either working or actively looking for work."},
+  {"code": "GC.DOD.TOTL.GD.ZS", "label": "Central government debt (% of GDP)", "format": "pct", "meaning": "What the central government owes, measured against one year of the country's total output."},
+  {"code": "NE.EXP.GNFS.ZS", "label": "Exports of goods and services (% of GDP)", "format": "pct", "meaning": "How much of the economy's output is sold abroad: a measure of openness to trade."},
+  {"code": "NE.IMP.GNFS.ZS", "label": "Imports of goods and services (% of GDP)", "format": "pct", "meaning": "How much the economy buys from abroad, relative to its own output."},
+  {"code": "NV.SRV.TOTL.ZS", "label": "Services, value added (% of GDP)", "format": "pct", "meaning": "The share of output from services such as finance, retail, tourism, health and education."},
+  {"code": "NV.IND.TOTL.ZS", "label": "Industry incl. construction, value added (% of GDP)", "format": "pct", "meaning": "The share of output from manufacturing, mining, utilities and construction."},
+  {"code": "NV.AGR.TOTL.ZS", "label": "Agriculture, forestry and fishing, value added (% of GDP)", "format": "pct", "meaning": "The share of output from farming, forestry and fishing."},
+  {"code": "BX.TRF.PWKR.DT.GD.ZS", "label": "Personal remittances received (% of GDP)", "format": "pct", "meaning": "Money sent home by people working abroad, relative to the size of the economy."},
+  {"code": "BX.KLT.DINV.WD.GD.ZS", "label": "Foreign direct investment, net inflows (% of GDP)", "format": "pct", "meaning": "New long-term investment by foreign companies and investors into the economy, relative to its size."}
+ ]
+}

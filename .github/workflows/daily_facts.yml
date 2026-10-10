@@ -1,0 +1,88 @@
+# Emails a short "Daily Facts" morning document to Kindle once a day.
+# See daily_facts.py for the logic and README.md ("Daily Facts automation")
+# for setup. Delivery state lives on the `daily-facts-state` branch, never on
+# main, and is independent of the NTIY workflow and its `ntiy-state` branch.
+name: Daily Facts to Kindle
+
+on:
+  schedule:
+    # 02:50 UK time (follows BST/GMT). Not on the hour: GitHub delays
+    # top-of-the-hour schedules most. Idempotent, so a rerun never resends.
+    - cron: "50 2 * * *"
+      timezone: "Europe/London"
+  workflow_dispatch:
+    inputs:
+      preview:
+        description: "Only build today's EPUB (no send, no state change)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-facts
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
+    timeout-minutes: 30
+    env:
+      MD_TO_KINDLE_SENDER_EMAIL: ${{ secrets.MD_TO_KINDLE_SENDER_EMAIL }}
+      MD_TO_KINDLE_DEST_EMAIL: ${{ secrets.MD_TO_KINDLE_DEST_EMAIL }}
+      MD_TO_KINDLE_APP_PASSWORD: ${{ secrets.MD_TO_KINDLE_APP_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # No OS keyring on the runner; make keyring return nothing so
+      # kindle_delivery falls back to MD_TO_KINDLE_APP_PASSWORD.
+      PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out state branch
+        if: ${{ !inputs.preview }}
+        uses: actions/checkout@v7
+        with:
+          ref: daily-facts-state
+          path: state
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Preview today's document
+        if: ${{ inputs.preview }}
+        run: python daily_facts.py --preview
+
+      - name: Deliver today's document
+        if: ${{ !inputs.preview }}
+        run: |
+          rc=0
+          python daily_facts.py --state state/daily_facts_state.json || rc=$?
+          if [ "$rc" -eq 10 ]; then exit 0; fi
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+          git -C state config user.name "github-actions[bot]"
+          git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C state add daily_facts_state.json
+          git -C state commit -q -m "Record delivered Daily Facts"
+          for attempt in 1 2 3; do
+            if git -C state push -q origin HEAD:daily-facts-state; then exit 0; fi
+            git -C state pull -q --rebase origin daily-facts-state
+          done
+          echo "::error::Daily Facts was sent but its state could not be pushed; a rerun may send a duplicate."
+          exit 1
+
+      - name: Upload generated files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: daily-facts-${{ github.run_id }}
+          path: |
+            inputs/daily_facts_*
+            outputs/daily_facts_*.epub
+          retention-days: 14
+          if-no-files-found: ignore
