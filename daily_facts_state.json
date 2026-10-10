@@ -1,3 +1,27 @@
 {
-  "sent": {}
+  "sent": {
+    "2026-10-10": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Anthropic describes model-based graders as scalable but requiring human calibration, and identifies human graders as a means to calibrate them.",
+          "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+        }
+      ],
+      "ai_theme": "Evaluation and evals",
+      "ai_topic": "Calibrating LLM Judges with Humans",
+      "at": "2026-10-10T11:55:41+00:00",
+      "country": "KHM",
+      "indicators": {
+        "JM": "NY.GDP.MKTP.KD.ZG",
+        "UK": "SL.UEM.TOTL.ZS"
+      },
+      "research_title": "Error correction code",
+      "reviewer_disagreements": [],
+      "warnings": []
+    }
+  }
 }
