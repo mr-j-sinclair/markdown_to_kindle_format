@@ -289,6 +289,32 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(rc, nf.EXIT_DELIVERED)
         self.assertIn(self.episodes[-1].guid, self.processed())
 
+    def test_converter_diagram_gate_exit_is_failure_not_nothing_new(self):
+        # md_to_kindle.py exits 3 for UnconvertedDiagramError; it must surface as
+        # a failure, never be mistaken for "nothing new" (which the workflow treats as success).
+        self.seed(1)
+        state = nf.load_state(self.state_path)
+        with patch.object(nf.subprocess, "run") as run:
+            run.return_value.returncode = 3
+            rc = nf.cmd_next(self.episodes, self.channel, state, self.state_path, 5, False)
+        run.assert_called_once()
+        self.assertEqual(rc, 3)
+        self.assertNotEqual(rc, nf.EXIT_NOTHING_NEW)
+        self.assertNotIn(self.episodes[-1].guid, self.processed())
+
+    def test_own_exit_codes_do_not_collide_with_converter_codes(self):
+        converter_codes = {1, 2, 3}  # md_to_kindle.py: conversion, send, diagram gate
+        self.assertNotIn(nf.EXIT_NOTHING_NEW, converter_codes)
+        self.assertNotIn(nf.EXIT_FLOOD_GUARD, converter_codes)
+
+    def test_workflow_success_code_matches_nothing_new_constant(self):
+        workflow = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                ".github", "workflows", "ntiy_daily.yml")
+        with open(workflow, encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn(f"-eq {nf.EXIT_NOTHING_NEW} ]", text)
+        self.assertNotIn("-eq 3 ]", text)
+
     def test_flood_guard_sends_nothing(self):
         rc, conv = self.next(max_sends=5)  # empty state: all 8 fixture items unseen
         self.assertEqual(rc, nf.EXIT_FLOOD_GUARD)

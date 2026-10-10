@@ -18,9 +18,11 @@ times over the feed's history -- dropping only the repeated title line, the
 boilerplate lines and empty paragraphs; every other node passes through
 verbatim.
 
-Exit codes for --next: 0 = one episode delivered, 3 = nothing new,
-4 = flood guard tripped (nothing sent), 1/2 = feed or converter failure
-(2 = EPUB built but Kindle send failed, passed through from md_to_kindle.py).
+Exit codes for --next: 0 = one episode delivered, 10 = nothing new,
+4 = flood guard tripped (nothing sent), 1/2/3 = feed or converter failure
+(md_to_kindle.py's 1/2/3 are passed through: 2 = EPUB built but Kindle send
+failed, 3 = unconverted ASCII diagram). "Nothing new" is 10, not 3, so the
+workflow's "nothing new is success" check can't swallow a converter failure.
 """
 
 import argparse
@@ -51,7 +53,7 @@ DEFAULT_MAX_SENDS = 5
 BANNER_SIZE = (1200, 628)
 
 EXIT_DELIVERED = 0
-EXIT_NOTHING_NEW = 3
+EXIT_NOTHING_NEW = 10
 EXIT_FLOOD_GUARD = 4
 
 _NS = {
