@@ -1,5 +1,7 @@
 # markdown_to_kindle_format
 
+[![Tests](https://github.com/mr-j-sinclair/markdown_to_kindle_format/actions/workflows/tests.yml/badge.svg)](https://github.com/mr-j-sinclair/markdown_to_kindle_format/actions/workflows/tests.yml)
+
 Convert Markdown, HTML, plain text, or PDF into a plain, reflowable EPUB
 ready to hand to Amazon's **Send to Kindle** app. Send to Kindle accepts
 EPUB directly and converts it to native Kindle format on Amazon's servers,
@@ -15,10 +17,26 @@ Kindle math rendering.
 Send to Kindle only wants a well-formed EPUB, but most existing conversion
 tools either over-engineer the problem with full Calibre/KFX tooling, or
 under-support the kind of source material that actually needs converting —
-math-heavy notes, scraped article HTML, images, Mermaid diagrams. This is a
-single-file, dependency-light converter built specifically to fill that
-gap: one script, no Calibre install, no KFX pipeline, just a clean EPUB (or
-paginated PDF) out the other end.
+math-heavy notes, scraped article HTML, images, Mermaid diagrams. The
+converter is a single script built specifically to fill that gap: no
+Calibre install, no KFX pipeline, just a clean EPUB (or paginated PDF) out
+the other end. Around it, the repository has grown email delivery to
+Kindle, two scheduled automations, and Claude Code skills that prepare
+content for the converter.
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `md_to_kindle.py` | The converter: Markdown/HTML/text/PDF → EPUB or PDF |
+| `kindle_delivery.py` | Emails a finished EPUB to Kindle ([Send to Kindle](#send-to-kindle)) |
+| `ntiy_feed.py`, `.github/workflows/ntiy_daily.yml` | [New Testament in a Year automation](#new-testament-in-a-year-automation); state on the `ntiy-state` branch |
+| `daily_facts.py`, `.github/workflows/daily_facts.yml` | [Daily Facts automation](#daily-facts-automation); state on the `daily-facts-state` branch |
+| `.github/workflows/tests.yml` | Runs the test suite on every push to `main` and every pull request ([Tests](#tests)) |
+| `.claude/skills/` | Claude Code skills that prepare source Markdown (documents, emails, LinkedIn posts, Order of Service) |
+| `tests/` | Unit and end-to-end tests |
+| `inputs/`, `outputs/` | Source Markdown/HTML in, converted EPUB/PDF out (git-ignored, apart from two sample inputs) |
+| `docs/` | Design notes |
 
 ## Setup
 
@@ -653,6 +671,19 @@ PDFs with visible table rules but can under-detect borderless/whitespace
 tables, and can occasionally misread stray characters (e.g. a literal `|`
 in body text) as a column boundary. No LaTeX/math scanning is done for PDF
 input — math in a PDF stays as extracted text.
+
+## Tests
+
+```bash
+.venv/bin/python3 -m unittest discover -s tests
+```
+
+The suite mocks the network, SMTP, keyring and OpenAI, so it never sends
+anything. `.github/workflows/tests.yml` runs it on GitHub Actions (Ubuntu,
+with Graphviz and DejaVu fonts installed) for every push to `main` and every
+pull request. That workflow gets no secrets, so it can't deliver to Kindle.
+A few PDF glyph tests need macOS-only fonts, so they skip there; run the
+suite locally on the Mac to cover them.
 
 ## Verifying output
 
