@@ -19,8 +19,10 @@ call C reviews the rendered document plus the run's diagnostics and writes a
 short warning box when something looks wrong. Where call C disagrees with a
 sourced claim, the sourced prose stays as written and the reviewer's view is
 shown as a labelled note under that section -- but only when a follow-up
-"source check" call (made only on days call C disputes something) cites a
-page its own web search returned (validated like call B's sources).
+"source check" call (made only on days call C disputes something), shown
+each disputed section with its own source links, judges the disagreement
+justified and cites a page its own web search returned (validated like
+call B's sources).
 
 A failed source or model call degrades only its own section ("Unavailable
 today: ...") and is listed in the warning box; nothing is fabricated. The
@@ -640,9 +642,10 @@ def _disagreement_schema(*fields) -> dict:
                        "note": {"type": "string"}, **{f: {"type": "string"} for f in fields}}}}
 
 
-def review_document(document: str, diagnostics: list, client=None) -> dict:
+def review_document(document: str, diagnostics: list, client=None, sections: dict = None) -> dict:
     """Call C: a short "run check" over the whole rendered document. No
-    tools; any disagreements it records are then sourced by source_check()
+    tools; any disagreements it records are then checked against their
+    section (sections: {section key: rendered section}) by source_check()
     and kept only if their url matches a URL that search tool returned."""
     client = client or _openai_client()
     diag = "\n".join(f"- {d}" for d in diagnostics) or "- (none)"
@@ -663,7 +666,7 @@ def review_document(document: str, diagnostics: list, client=None) -> dict:
     disagreements = validated_disagreements(review.get("source_disagreements"))
     if disagreements:
         try:
-            sourced = source_check(disagreements, client=client)
+            sourced = source_check(disagreements, sections or {}, client=client)
         except Exception as e:
             print(f"note: dropped {len(disagreements)} reviewer disagreement(s); source check failed "
                   f"({_describe(e)})", file=sys.stderr)
@@ -678,27 +681,38 @@ def review_document(document: str, diagnostics: list, client=None) -> dict:
 
 
 SOURCE_CHECK_INSTRUCTIONS = """\
-A reviewer disputes the statements below in a morning digest. For each
-disagreement, find a web page that supports the reviewer's view, using one
-web search for all of them. Return each disagreement with its section and
-note copied exactly as given, plus in "url" the exact url of a page from
-your search results that supports it. Prefer authoritative sources:
-official or government statistics, reference works, primary sources and
-established news organisations; avoid forums and user-generated sites.
-Leave out any disagreement your search does not support. No other text."""
+A reviewer disputes statements in a morning digest. Below, each disputed
+section appears exactly as published, including its own source links,
+followed by the reviewer's disagreements with it. Using one web search for
+all of them, assess whether each disagreement is justified in context: does
+it identify a real error or genuinely disputed claim in what the section
+actually says, given its cited sources? Weigh the evidence either way; do
+not set out to confirm the reviewer. Keep a disagreement only when your
+search results support it, and return it with its section and note copied
+exactly as given, plus in "url" the exact url of a page from your search
+results that supports it. Prefer authoritative sources: official or
+government statistics, reference works, primary sources and established
+news organisations; avoid forums and user-generated sites. Leave out any
+disagreement that misreads the section, is a matter of emphasis, or that
+the searched evidence does not support. No other text."""
 
 
-def source_check(disagreements: list, client=None) -> list:
+def source_check(disagreements: list, sections: dict, client=None) -> list:
     """Follow-up to call C, made only when it disputes something: one web
-    search (at most one tool call for all notes) to source the
-    disagreements. Each kept item must repeat one of call C's notes and cite
-    a URL the search tool returned; the rest are dropped."""
+    search (at most one tool call for all notes) to judge each disagreement
+    against its section as published (sections: {section key: rendered
+    section}, with its source links). Each kept item must repeat one of call
+    C's notes and cite a URL the search tool returned; the rest are dropped."""
     client = client or _openai_client()
-    notes = "\n".join(f"- section: {d['section']}; note: {d['note']}" for d in disagreements)
+    blocks = []
+    for key in dict.fromkeys(d["section"] for d in disagreements):
+        notes = "\n".join(f"- {d['note']}" for d in disagreements if d["section"] == key)
+        blocks.append(f"SECTION: {key}\n{sections.get(key) or '(section text unavailable)'}\n\n"
+                      f"DISAGREEMENTS:\n{notes}")
     resp = client.responses.create(
         model=MODEL,
         instructions=SOURCE_CHECK_INSTRUCTIONS,
-        input=f"DISAGREEMENTS:\n{notes}",
+        input="\n\n---\n\n".join(blocks),
         tools=[{"type": "web_search"}],
         tool_choice="required",
         max_tool_calls=1,
@@ -1067,9 +1081,10 @@ def build_document(sel: Selection, facts: Facts, client=None):
     and are not counted as warnings. Raises UnsafeDocumentError if the final
     document links anywhere code did not put a link."""
     body = render_body(sel, facts)
-    review = _llm(lambda: review_document(assemble(sel.date, "", body), facts.diagnostics, client=client),
-                  facts, "Run check (call C)")
     sections = render_sections(sel, facts)
+    review = _llm(lambda: review_document(assemble(sel.date, "", body), facts.diagnostics, client=client,
+                                          sections=sections),
+                  facts, "Run check (call C)")
     disagreements = [d for d in (review["source_disagreements"] if review else [])
                      if _UNAVAILABLE not in sections[d["section"]]]
     reviewer_notes = {}

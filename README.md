@@ -376,7 +376,9 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
     and its view appears as a labelled "AI reviewer note" under that section,
     with a link to the reviewer's own source. Call C has no tools; only on
     days it disputes something does a follow-up "source check" call make one
-    web search to source the disagreements. A disagreement is shown only if
+    web search. It sees each disputed section as published, with its own
+    source links, and keeps a disagreement only if the searched evidence
+    shows it is justified in context. A disagreement is shown only if
     its URL matches a page that search returned, validated like call B's
     sources; unsourced ones are dropped, as are all of them if the source
     check fails. These notes are stored in state with their URL but are not

@@ -835,6 +835,20 @@ class DisagreementTests(Base):
         self.assertIn("Disputed.", req["input"])
         self.assertEqual(len(review["source_disagreements"]), 2)
 
+    def test_source_check_sees_disputed_section_with_its_sources(self):
+        client = self.review_client(("research", HAMMING), ("research", "Also disputed."))
+        sel, facts = self.gather(client=client)
+        df.build_document(sel, facts, client=client)
+        req = client.requests[-1]
+        self.assertEqual(req["text"]["format"]["name"], "source_check")
+        research = df.render_sections(sel, facts)["research"]
+        self.assertIn(f"SECTION: research\n{research}\n\nDISAGREEMENTS:\n- {HAMMING}\n- Also disputed.",
+                      req["input"])
+        self.assertIn(facts.research_wiki.url, req["input"])   # the section's own source link
+        self.assertEqual(req["input"].count("SECTION:"), 1)    # only disputed sections, each once
+        self.assertIn("justified in context", req["instructions"])
+        self.assertNotIn("supports the reviewer's view", req["instructions"])
+
     def test_source_check_failure_drops_disagreements(self):
         client = self.review_client(("research", HAMMING))
         client.answers["source_check"] = [RuntimeError("down")]
