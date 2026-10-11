@@ -22,6 +22,28 @@
       "research_title": "Error correction code",
       "reviewer_disagreements": [],
       "warnings": []
+    },
+    "2026-10-11": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines execution rails as validation for tool calls and their inputs or outputs.",
+          "url": "https://docs.nvidia.com/nemo/guardrails/about-nemo-guardrails-library/rail-types"
+        }
+      ],
+      "ai_theme": "Guardrails and safety",
+      "ai_topic": "Guardrails at the Tool Boundary",
+      "at": "2026-10-11T07:51:19+00:00",
+      "country": "ARG",
+      "indicators": {
+        "JM": "BX.KLT.DINV.WD.GD.ZS",
+        "UK": "NY.GNP.PCAP.PP.CD"
+      },
+      "research_title": "Mitochondria",
+      "reviewer_disagreements": [],
+      "warnings": []
     }
   }
 }
