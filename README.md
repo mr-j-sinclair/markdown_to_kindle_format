@@ -371,9 +371,11 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
   rotation once.
 - **Sources:** the country details come from `countries.json` (193 UN
   members, trimmed from [mledoze/countries](https://github.com/mledoze/countries),
-  ODbL). Population and economy figures come from the
-  [World Bank API](https://data.worldbank.org/), and the population comparison
-  uses the newest year both countries have. Flags come from
+  ODbL). Population, land area and economy figures come from the
+  [World Bank API](https://data.worldbank.org/). The population and land-area
+  comparisons use the newest year both countries have. Jamaica's indicator is
+  also fetched for the UK, for Jamaica's year if the UK has it, otherwise the
+  UK's latest. Flags come from
   [flagcdn](https://flagcdn.com/) and are embedded locally. Article
   summaries come from the Wikipedia REST API. None of these needs a key.
 - **LLM boundary** (`gpt-6-luna`, OpenAI Responses API):
@@ -401,6 +403,18 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
     sources; unsourced ones are dropped, as are all of them if the source
     check fails. These notes are stored in state with their URL but are not
     counted as warnings.
+  - Call D writes one sentence comparing a figure with the UK's: today's
+    country's land area (under the flag table, skipped when the country is
+    the UK) and Jamaica's indicator (in the Jamaica section). It has no
+    tools and runs once per comparison. Code supplies both values, their
+    years and a computed relation phrase, such as "96% smaller than the UK"
+    or "1.1 percentage points higher than the UK's". The sentence is rejected,
+    retried once and then shown as "UK comparison unavailable today" if it
+    is more than one sentence, lacks that phrase word for word, leaves out
+    either year when the two years differ, or contains a number (with its
+    sign and million/billion/trillion) that was not supplied. If the UK has
+    no figure, or it could not be fetched, the sentence says so. Call C is
+    told these percentages are code-computed and not to recompute them.
   - Table cells, numbers, years and links always come from code.
 - **Run check:** a failed source or model call degrades only its own section
   ("Unavailable today: ..."), and nothing is ever filled in from guesswork. A
@@ -433,6 +447,20 @@ cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
 .venv/bin/python3 daily_facts.py --dry-run --date 2026-10-10   # Markdown only -> inputs/
 .venv/bin/python3 daily_facts.py --preview                     # today's EPUB -> outputs/, no send
 .venv/bin/python3 daily_facts.py --check-data                  # validate catalogues against Wikipedia
+```
+
+- **Live smoke tests:** `tests/test_daily_facts_live.py` makes real World
+  Bank, Wikipedia and OpenAI calls (a few cents per run), so it is skipped
+  unless `DAILY_FACTS_LIVE=1`; with the flag but no `OPENAI_API_KEY` it
+  fails rather than skips. It checks call D on its own (a larger and a
+  smaller country, a Jamaica/UK pair, and the no-UK-data case) and builds a
+  whole day with `--preview`, so nothing is sent and no state changes.
+  `DAILY_FACTS_LIVE_DATE` picks the day (default 2026-10-11).
+  `DAILY_FACTS_LIVE_OUT` sets where the Markdown and EPUB are kept (default:
+  a new temporary directory, printed at the end).
+
+```bash
+OPENAI_API_KEY="$(security find-generic-password -s openai-api-key -w)" DAILY_FACTS_LIVE=1 .venv/bin/python3 -m unittest tests.test_daily_facts_live -v
 ```
 
 ## Mermaid diagrams

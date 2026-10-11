@@ -62,18 +62,35 @@ def default_routes(country_iso3="JAM"):
             rows.append(wb_row("GBR", 2025, 69_500_000))  # UK has a newer year the country lacks
         return wb_page(rows)
 
+    def land(url):
+        return wb_page([wb_row(country_iso3, 2024, 10_830, df.LAND_AREA), wb_row("GBR", 2024, 241_930, df.LAND_AREA)])
+
     def latest(url):
         iso3 = re.search(r"country/([A-Z]{3})/", url).group(1)
         code = re.search(r"indicator/([^?]+)", url).group(1)
         return wb_page([wb_row(iso3, 2025, 4.2, code)])
 
+    def uk_series(url):  # the UK's value of Jamaica's indicator
+        code = re.search(r"indicator/([^?]+)", url).group(1)
+        return wb_page([wb_row("GBR", 2025, 3.1, code), wb_row("GBR", 2024, 2.9, code)])
+
     return {
         "SP.POP.TOTL?format=json&per_page=200&date=": population,
+        "AG.LND.TOTL.K2?format=json&per_page=200&date=": land,
         "mrnev=1": latest,
+        "country/GBR/indicator/": uk_series,
         "flagcdn.com": PNG,
         "w/api.php": lead(),
         "wikipedia.org": lambda url: wiki(url.rsplit("/", 1)[1]),
     }
+
+
+def world_bank_down_routes():
+    routes = default_routes()
+    for key in [k for k in routes if "date=" in k or "mrnev" in k or "/indicator/" in k]:
+        del routes[key]
+    routes["worldbank"] = TimeoutError()
+    return routes
 
 
 TOOL_URL = "https://Example.com/Guide/Evals?utm_source=openai"
@@ -103,6 +120,14 @@ GOOD_B = {"topic_title": "Context rot", "concept": "Long contexts degrade recall
           "why_it_matters": ["It limits agent reliability."],
           "sources": [{"url": "https://example.com/Guide/Evals", "supports": "Recall degrades with length."}]}
 GOOD_C = {"status": "ok", "notes": [], "source_disagreements": []}
+
+
+def echo_comparison(request):
+    """Call D stand-in: one sentence repeating the block's RELATION line."""
+    relation = re.search(r"^RELATION: (.+)$", request["input"], re.MULTILINE)
+    sentence = (f"It is {relation.group(1)}." if relation
+                else "No UK figure is available, so no comparison is possible.")
+    return response({"sentence": sentence}, tool_calls=[])
 REVIEWER_URL = "https://history.example/Golay-1949"   # a page the source check's search returned
 
 
@@ -133,13 +158,14 @@ class FakeClient:
         item = queue.pop(0) if len(queue) > 1 else queue[0]
         if isinstance(item, Exception):
             raise item
-        return item
+        return item(kwargs) if callable(item) else item
 
 
 def good_client():
     return FakeClient({"grounded_prose": [response(GOOD_A, tool_calls=[])],
                        "ai_lesson": [response(GOOD_B)],
-                       "run_check": [response(GOOD_C, tool_calls=[])]})
+                       "run_check": [response(GOOD_C, tool_calls=[])],
+                       "comparison": [echo_comparison]})
 
 
 class Base(unittest.TestCase):
@@ -485,13 +511,11 @@ class DegradationTests(Base):
         return with_disagreements(good_client(), ("flag", "Disputed."))
 
     def test_world_bank_down(self):
-        routes = default_routes()
-        routes["worldbank"] = TimeoutError()
-        for key in [k for k in routes if "mrnev" in k or "SP.POP" in k]:
-            del routes[key]
-        sel, facts = self.gather(routes)
+        sel, facts = self.gather(world_bank_down_routes())
         markdown, warnings, _ = df.build_document(sel, facts, client=good_client())
         self.assertIn("| Population | unavailable today |", markdown)
+        self.assertIn("| Land area | unavailable today |", markdown)
+        self.assertNotIn("Size vs UK", markdown)
         self.assertIn("Unavailable today: uk economy fact", markdown)
         self.assertIn("Unavailable today: jamaica economy fact", markdown)
         self.assertIn("> - Population unavailable (World Bank SP.POP.TOTL: TimeoutError).", markdown)
@@ -499,7 +523,8 @@ class DegradationTests(Base):
         self.assertNotRegex(markdown.split("## UK Economy", 1)[1], r"\d+\.\d%")
 
     def test_openai_down_keeps_code_facts_and_shows_raw_diagnostics(self):
-        down = FakeClient({name: [RuntimeError("down")] for name in ("grounded_prose", "ai_lesson", "run_check")})
+        down = FakeClient({name: [RuntimeError("down")] for name in ("grounded_prose", "ai_lesson", "run_check",
+                                                                  "comparison")})
         sel, facts = self.gather(client=down)
         markdown, warnings, _ = df.build_document(sel, facts, client=down)
         self.assertIn("Run check unavailable; raw diagnostics below.", markdown)
@@ -953,6 +978,224 @@ class DisagreementTests(Base):
         self.assertFalse(any(HAMMING in w for w in entry["warnings"]))
 
 
+# ---------- UK comparisons (call D) ----------
+
+def comparison_client(*sentences):
+    return FakeClient({"comparison": [response({"sentence": x}, tool_calls=[]) for x in sentences]})
+
+
+class ComparisonTests(Base):
+    def compare(self, sentence, block="JAMAICA: 4.2% (2025)\nUK: 3.1% (2025)\nRELATION: 1.1 percentage "
+                                      "points higher than the UK's",
+                relation="1.1 percentage points higher than the UK's"):
+        return df.write_comparison(block, relation, client=comparison_client(sentence))
+
+    def test_land_relation(self):
+        self.assertEqual(df.land_relation(10_830, 241_930), "96% smaller than the UK")    # Jamaica
+        self.assertEqual(df.land_relation(2_736_690, 241_930), "1,031% larger than the UK")  # Argentina
+        self.assertEqual(df.land_relation(241_930, 241_930), "the same size as the UK")
+        self.assertEqual(df.land_relation(244_000, 241_930), "0.86% larger than the UK")
+        self.assertEqual(df.land_relation(2.084, 241_930), "99.999% smaller than the UK")  # Monaco: never 100%
+        self.assertEqual(df.format_area(2.084), "2.08 km²")
+        self.assertEqual(df.format_area(241_930), "241,930 km²")
+
+    def test_land_block_carries_values_years_and_relation(self):
+        sel = self.jamaica_selection()
+        facts = df.Facts(land={"value": 2_736_690, "uk_value": 241_930, "year": 2024})
+        block, relation = df.land_block(sel, facts)
+        self.assertEqual(relation, "1,031% larger than the UK")
+        for text in ("LAND AREA: 2,736,690 km² (2024)", "UK LAND AREA: 241,930 km² (2024)",
+                     "SIZE RATIO: 11.3× the UK's", "RELATION: 1,031% larger than the UK"):
+            self.assertIn(text, block)
+
+    def test_economy_relation(self):
+        self.assertEqual(df.economy_relation(4.24, 3.06, "pct"), "1.1 percentage points higher than the UK's")
+        self.assertEqual(df.economy_relation(-1.0, 2.3, "pct"), "3.3 percentage points lower than the UK's")
+        self.assertEqual(df.economy_relation(2.04, 1.96, "pct"), "the same as the UK's")  # equal as displayed
+        self.assertEqual(df.economy_relation(6_000, 50_000, "usd"), "12% of the UK's")
+
+    def test_valid_sentence_passes_with_decimals_and_curly_apostrophe(self):
+        sentence = "Jamaica's 4.2% in 2025 was 1.1 percentage points higher than the UK’s 3.1%."
+        self.assertEqual(self.compare(sentence), sentence)
+
+    def test_relation_phrase_required(self):
+        for bad in ("Jamaica's 4.2% was above the UK's 3.1% in 2025.",                   # paraphrased
+                    "Jamaica's 4.2% was 1.1 percentage points lower than the UK's."):     # wrong direction
+            with self.assertRaises(df.LLMError, msg=bad):
+                self.compare(bad)
+
+    def test_numeric_guard(self):
+        with self.assertRaises(df.LLMError):   # invented number
+            self.compare("At 4.2%, Jamaica was 1.1 percentage points higher than the UK's, up from 3.9%.")
+        with self.assertRaises(df.LLMError):   # re-rounded number
+            self.compare("Jamaica's 4% was 1.1 percentage points higher than the UK's.")
+        block = "LAND AREA: 2,736,690 km² (2024)\nRELATION: 1,031% larger than the UK"
+        self.assertTrue(df.write_comparison(block, "1,031% larger than the UK", client=comparison_client(
+            "At 2736690 km² in 2024 it is 1,031% larger than the UK.")))  # commas ignored
+
+    def test_numeric_guard_keeps_sign_and_scale(self):
+        block = ("JAMAICA: $6 billion (2025)\nUK: -1.0% (2025)\n"
+                 "UK: no figure available in World Bank data for 2019-2026\nRELATION: 12% of the UK's")
+        ok = df.write_comparison(block, "12% of the UK's", client=comparison_client(
+            "At $6 billion it is 12% of the UK's, with no UK figure for 2019-2026 and the UK at -1.0%."))
+        self.assertTrue(ok)
+        for bad in ("At $6 million it is 12% of the UK's.",          # scale swapped
+                    "It is 12% of the UK's, against the UK's 1.0%.",  # sign dropped
+                    "It is 12% of the UK's, against the UK's \u22121.5%."):
+            with self.assertRaises(df.LLMError, msg=bad):
+                df.write_comparison(block, "12% of the UK's", client=comparison_client(bad))
+        self.assertEqual(df._numbers("\u22121.0% and -1.0%"), {"-1.0"})
+
+    def test_differing_years_must_both_appear(self):
+        block = ("JAMAICA: 4.2% (2025)\nUK: 2.0% (2023)\nRELATION: 2.2 percentage points higher than the UK's\n"
+                 "NOTE: the figures are from different years (Jamaica 2025, UK 2023)")
+        relation = "2.2 percentage points higher than the UK's"
+        with self.assertRaises(df.LLMError):
+            df.write_comparison(block, relation, client=comparison_client(
+                "Jamaica's 4.2% in 2025 was 2.2 percentage points higher than the UK's."))
+        self.assertTrue(df.write_comparison(block, relation, client=comparison_client(
+            "Jamaica's 4.2% in 2025 was 2.2 percentage points higher than the UK's 2.0% in 2023.")))
+
+    def test_one_sentence_guard(self):
+        for bad in ("It is 1.1 percentage points higher than the UK's. That is notable.",
+                    "It is 1.1 percentage points higher than the UK's. and that is notable",
+                    "It is 1.1 percentage points higher than the UK's\nin 2025.",
+                    "", "  "):
+            with self.assertRaises(df.LLMError, msg=bad):
+                self.compare(bad)
+        with self.assertRaises(df.LLMError):
+            self.compare("It is 1.1 percentage points higher than the UK's " + "word " * 40)
+        with self.assertRaises(df.LLMError):   # markup goes through _safe_text
+            self.compare("It is [1.1 percentage points higher than the UK's](https://evil.example).")
+
+    def test_call_d_request_shape(self):
+        client = comparison_client("It is 1.1 percentage points higher than the UK's.")
+        df.write_comparison("RELATION: 1.1 percentage points higher than the UK's",
+                            "1.1 percentage points higher than the UK's", client=client)
+        req = client.requests[0]
+        self.assertEqual(req["reasoning"], {"effort": "low"})
+        for key in ("tools", "tool_choice", "include"):
+            self.assertNotIn(key, req)
+        schema = req["text"]["format"]["schema"]
+        self.assertTrue(req["text"]["format"]["strict"])
+        self.assertEqual(schema["required"], ["sentence"])
+        self.assertFalse(schema["additionalProperties"])
+
+    def comparison_requests(self, client):
+        return [r for r in client.requests if r["text"]["format"]["name"] == "comparison"]
+
+    def test_both_comparisons_rendered(self):
+        client = good_client()
+        sel, facts = self.gather(client=client)
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        flag = markdown.split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("| Land area | 10,830 km² (2024) |", flag)
+        self.assertIn("|\n\n**Size vs UK:** It is 96% smaller than the UK.\n\nAn island", flag)
+        jamaica = markdown.split("## Jamaica Economy", 1)[1]
+        self.assertRegex(jamaica, r"\*\*vs UK:\*\* It is .+\.\n\nSource: ")
+        code = facts.jm_econ["indicator"]["code"]
+        self.assertIn(f"UK figure: [World Bank — {code} (UK)]({df.world_bank_url(code, 'GB')})", jamaica)
+        self.assertEqual(facts.jm_uk, {"value": 3.1, "year": 2025})   # UK value for Jamaica's year
+        self.assertEqual(len(self.comparison_requests(client)), 2)
+
+    def test_uk_value_for_other_year_is_stated(self):
+        routes = default_routes()
+        routes["country/GBR/indicator/"] = lambda url: wb_page([wb_row("GBR", 2023, 2.0), wb_row("GBR", 2021, 9.0)])
+        client = good_client()
+        sel, facts = self.gather(routes, client=client)
+        self.assertEqual(facts.jm_uk, {"value": 2.0, "year": 2023})   # the UK's latest, not an older year
+        block = self.comparison_requests(client)[-1]["input"]
+        self.assertIn("NOTE: the figures are from different years (Jamaica 2025, UK 2023)", block)
+        self.assertIn("UK: ", block)
+
+    def test_uk_equivalent_no_data(self):
+        routes = default_routes()
+        routes["country/GBR/indicator/"] = lambda url: wb_page([wb_row("GBR", 2025, None)])
+        client = good_client()
+        sel, facts = self.gather(routes, client=client)
+        self.assertEqual(facts.jm_uk, "no_data")
+        self.assertFalse(any("Jamaica comparison" in d for d in facts.diagnostics))
+        block = self.comparison_requests(client)[-1]["input"]
+        self.assertIn("UK: no figure available in World Bank data for 2019-2026", block)
+        self.assertNotIn("RELATION", block)
+        jamaica = df.render_body(sel, facts).split("## Jamaica Economy", 1)[1]
+        self.assertIn("**vs UK:** No UK figure is available", jamaica)
+        self.assertNotIn("(UK)", jamaica)
+        df.check_links(df.render_body(sel, facts), df.allowed_links(sel, facts))
+
+    def test_uk_equivalent_fetch_failed(self):
+        routes = default_routes()
+        routes["country/GBR/indicator/"] = TimeoutError()
+        client = good_client()
+        sel, facts = self.gather(routes, client=client)
+        self.assertEqual(facts.jm_uk, "fetch_failed")
+        self.assertTrue(any(d.startswith("UK figure for the Jamaica comparison unavailable") for d in facts.diagnostics))
+        self.assertIn("UK: the UK figure could not be retrieved today", self.comparison_requests(client)[-1]["input"])
+        self.assertNotIn("(UK)", df.render_body(sel, facts))
+
+    def test_comparisons_degrade_independently(self):
+        for failing, kept in (("COUNTRY:", "**vs UK:**"), ("INDICATOR:", "**Size vs UK:**")):
+            def answer(req, failing=failing):
+                if failing in req["input"]:
+                    raise RuntimeError("down")
+                return echo_comparison(req)
+            client = good_client()
+            client.answers["comparison"] = [answer]
+            sel, facts = self.gather(client=client)
+            markdown, _, _ = df.build_document(sel, facts, client=client)
+            self.assertEqual(markdown.count("*UK comparison unavailable today.*"), 1)
+            self.assertIn(kept, markdown)
+            self.assertTrue(any("(call D) failed twice" in d for d in facts.diagnostics))
+            self.assertEqual(len(self.comparison_requests(client)), 3)  # failing one retried once
+
+    def test_call_d_failure_keeps_section_and_reviewer_notes(self):
+        client = with_disagreements(good_client(), ("jamaica_economy", "Disputed."))
+        client.answers["comparison"] = [RuntimeError("down")]
+        sel, facts = self.gather(client=client)
+        markdown, _, disagreements = df.build_document(sel, facts, client=client)
+        self.assertEqual(markdown.count("*UK comparison unavailable today.*"), 2)
+        self.assertNotIn("Unavailable today:", markdown.split("## Flag of the Day", 1)[1])
+        jamaica = markdown.split("## Jamaica Economy", 1)[1]
+        self.assertIn("AI reviewer note", jamaica)     # not suppressed like an unavailable section
+        self.assertIn("UK figure: [World Bank", jamaica)
+        self.assertEqual([d["section"] for d in disagreements], ["jamaica_economy"])
+
+    def test_links_remain_code_owned(self):
+        client = good_client()
+        client.answers["comparison"] = [response({"sentence": "It is 96% smaller than the UK, see "
+                                                               "[here](https://evil.example)."}, tool_calls=[])]
+        sel, facts = self.gather(client=client)
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        self.assertNotIn("evil.example", markdown)
+        links = set(df.rendered_links(df.converter_view(markdown)[0]))
+        self.assertEqual(links, df.allowed_links(sel, facts))
+        self.assertIn(df.world_bank_url(df.LAND_AREA, "JM"), links)
+
+    def test_uk_as_country_makes_no_land_call(self):
+        sel = df.select(DATE, self.data)
+        sel.country = next(c for c in self.data["countries"] if c["cca3"] == "GBR")
+        client = good_client()
+        _, facts = self.gather(default_routes("GBR"), client=client, sel=sel)
+        self.assertIsNotNone(facts.land)
+        self.assertIsNone(facts.land_comparison)
+        inputs = [r["input"] for r in self.comparison_requests(client)]
+        self.assertEqual(len(inputs), 1)
+        self.assertTrue(inputs[0].startswith("INDICATOR:"))
+        flag = df.render_body(sel, facts).split("\n## ", 1)[0]
+        self.assertIn("| Land area | 241,930 km² (2024) |", flag)
+        self.assertNotIn("vs UK:**", flag)
+        self.assertNotIn("UK comparison unavailable", flag)
+
+    def test_land_area_uses_latest_common_year(self):
+        routes = default_routes()
+        routes["AG.LND.TOTL.K2?format=json&per_page=200&date="] = wb_page([
+            wb_row("JAM", 2023, 10_830, df.LAND_AREA), wb_row("GBR", 2023, 241_930, df.LAND_AREA),
+            wb_row("GBR", 2024, 241_930, df.LAND_AREA)])
+        _, facts = self.gather(routes)
+        self.assertEqual(facts.land, {"value": 10_830, "uk_value": 241_930, "year": 2023})
+        self.assertIn("Land area comparison uses 2023, the latest year both countries have.", facts.diagnostics)
+
+
 # ---------- orchestration ----------
 
 class MainTests(Base):
@@ -997,11 +1240,7 @@ class MainTests(Base):
         self.assertEqual(client.requests, [])
 
     def test_degraded_run_still_sends_and_records_warnings(self):
-        routes = default_routes()
-        routes["worldbank"] = TimeoutError()
-        for key in [k for k in routes if "mrnev" in k or "SP.POP" in k]:
-            del routes[key]
-        with patch.object(df, "http_get", FakeHTTP(routes)):
+        with patch.object(df, "http_get", FakeHTTP(world_bank_down_routes())):
             code, run = self.run_main()
         self.assertEqual(code, df.EXIT_SENT)
         run.assert_called_once()

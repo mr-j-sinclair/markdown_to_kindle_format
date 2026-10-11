@@ -22,7 +22,10 @@ shown as a labelled note under that section -- but only when a follow-up
 "source check" call (made only on days call C disputes something), shown
 each disputed section with its own source links, judges the disagreement
 justified and cites a page its own web search returned (validated like
-call B's sources).
+call B's sources). Call D writes one sentence comparing a code-fetched
+figure with the UK's (land area; Jamaica's indicator). It gets the values,
+years and a code-computed relation phrase, must repeat that phrase verbatim
+and may use no number that is not in its input.
 
 A failed source or model call degrades only its own section ("Unavailable
 today: ...") and is listed in the warning box; nothing is fabricated. The
@@ -64,7 +67,7 @@ EPOCH = datetime.date(2026, 1, 1)
 USER_AGENT = "markdown_to_kindle_format/daily_facts (https://github.com/mr-j-sinclair/markdown_to_kindle_format)"
 HTTP_TIMEOUT = 20
 RETRY_DELAYS = (2, 5)          # seconds between the 3 attempts of a read-only GET
-POPULATION_YEARS = 6           # look back this far for a population year both countries have
+POPULATION_YEARS = 6           # look back this far for a population/land year both countries have
 BOUNDARY_GAP = 3               # no pick repeats within this many days across a rotation cycle boundary
 INDICATOR_TRIES = 3            # indicators tried (next permutation slot) before an economy section degrades
 STALE_YEARS = 3                # an observation this many years old is flagged in the run check
@@ -81,6 +84,8 @@ EXIT_UNSAFE_DOCUMENT = 1
 
 UK = "GBR"
 JAMAICA = "JAM"
+POPULATION = "SP.POP.TOTL"
+LAND_AREA = "AG.LND.TOTL.K2"   # km²
 WORLD_BANK_API = "https://api.worldbank.org/v2/country/{countries}/indicator/{code}?format=json&per_page=200&{query}"
 WIKIPEDIA_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 WIKIPEDIA_INTRO = ("https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1"
@@ -623,6 +628,9 @@ Flag only concrete problems: failed or unavailable sections, stale data
 years, implausible values (e.g. unemployment of 45%), prose that contradicts
 the table, empty or truncated sections, and anything in the diagnostics that
 the reader should know. Do not comment on style or writing quality.
+The percentages and ratios in the "Size vs UK" and "vs UK" lines are
+computed exactly by code from the figures shown; do not recompute or
+dispute them.
 
 If you believe a statement is wrong or disputed even though it may
 faithfully follow its cited source, do NOT put it in notes. Instead add a
@@ -765,18 +773,81 @@ def validated_disagreements(items, known: dict = None) -> list:
     return out[:MAX_DISAGREEMENTS]
 
 
+COMPARISON_INSTRUCTIONS = """\
+You write ONE short sentence comparing a figure with the UK's for a morning
+digest read on a Kindle. Lead with the comparison: if a RELATION line is
+given, the sentence must contain it word for word. Add at most one other
+detail, and only if it helps; do not stack the size ratio, the relation and
+both raw figures together. Use only the figures supplied, written exactly as
+supplied: no new numbers, no rounding, no calculations. If the two figures
+are from different years, give both years. If the UK figure is not
+available, say so and make no comparison.
+
+Style examples (their numbers are not yours to use):
+- Argentina is 1,031% larger than the UK, about 11.3 times its land area.
+- Jamaica's FDI inflows were 0.3 percentage points higher than the UK's in 2025.
+
+Aim for under 25 words. British English, plain prose: no markdown, no links,
+no URLs, and no abbreviations with full stops (write "for example", not
+"e.g.")."""
+
+# A number with its sign (a minus not attached to a word or digit, so a year
+# range like 2019-2026 is two years) and any scale word after it.
+_NUMBER_RE = re.compile(r"(?:(?<![\w])[-\u2212])?[0-9][0-9,]*(?:\.[0-9]+)?(?:\s+(?:million|billion|trillion)\b)?",
+                        re.IGNORECASE)
+_YEARS_NOTE_RE = re.compile(r"different years \(Jamaica (\d{4}), UK (\d{4})\)")
+
+
+def _numbers(text: str) -> set:
+    return {" ".join(n.replace(",", "").replace("\u2212", "-").lower().split()) for n in _NUMBER_RE.findall(text)}
+
+
+def write_comparison(block: str, relation: str, client=None) -> str:
+    """Call D: one sentence from a code-built comparison block. No tools.
+    The sentence must contain the code-computed relation phrase verbatim
+    (direction and size come from code), both years when economy_block notes
+    they differ, and no number (with its sign and scale) absent from block."""
+    client = client or _openai_client()
+    resp = client.responses.create(
+        model=MODEL,
+        instructions=COMPARISON_INSTRUCTIONS,
+        input=block,
+        reasoning={"effort": "low"},
+        max_output_tokens=1000,
+        text=_json_format("comparison", {"sentence": {"type": "string"}}),
+    )
+    _log_usage("call D", resp)
+    sentence = _parse_output(resp, {"sentence": 40})["sentence"]
+    if not sentence:
+        raise LLMError("comparison empty")
+    if "\n" in sentence or re.search(r"[.!?]\s+\S", sentence):
+        raise LLMError("comparison is not one sentence")
+    if relation and relation.lower() not in sentence.replace("\u2019", "'").lower():
+        raise LLMError("comparison does not state the computed relation")
+    years = _YEARS_NOTE_RE.search(block)
+    if years and not all(year in sentence for year in years.groups()):
+        raise LLMError("comparison omits a year although the years differ")
+    if _numbers(sentence) - _numbers(block):
+        raise LLMError("comparison contains a number that was not supplied")
+    return sentence
+
+
 # ---------- gathering ----------
 
 @dataclass
 class Facts:
     population: dict = None      # {"value", "uk_value", "year"}
+    land: dict = None            # {"value", "uk_value", "year"}, km²
     flag_file: str = None        # relative to inputs/
     country_wiki: WikiSummary = None
     research_wiki: WikiSummary = None
     uk_econ: dict = None         # {"indicator", "value", "year"}
     jm_econ: dict = None
+    jm_uk: object = None         # {"value", "year"}, "no_data" or "fetch_failed"
     prose: dict = None           # call A
     ai: dict = None              # call B
+    land_comparison: str = None  # call D
+    jm_comparison: str = None    # call D
     diagnostics: list = field(default_factory=list)
 
     def warn(self, message: str) -> None:
@@ -784,25 +855,27 @@ class Facts:
         self.diagnostics.append(message)
 
 
-def _gather_population(sel: Selection, facts: Facts) -> None:
+def _gather_vs_uk(sel: Selection, facts: Facts, code: str, label: str):
+    """{"value", "uk_value", "year"} for today's country and the UK in the
+    latest year both have (population, land area), or None with a warning."""
     iso3 = sel.country["cca3"]
     year = sel.date.year
     try:
-        series = world_bank_series([iso3, UK], "SP.POP.TOTL", year - POPULATION_YEARS, year)
+        series = world_bank_series([iso3, UK], code, year - POPULATION_YEARS, year)
     except FetchError as e:
-        facts.warn(f"Population unavailable ({e}).")
-        return
-    # A zero or negative population is no data for that year.
+        facts.warn(f"{label} unavailable ({e}).")
+        return None
+    # A zero or negative value is no data for that year.
     series = {iso3: {y: v for y, v in years.items() if v > 0} for iso3, years in series.items()}
     common = latest_common_year(series)
     if common is None:
-        facts.warn(f"No population year shared by {sel.country['name']} and the UK in World Bank data.")
-        return
+        facts.warn(f"No {label.lower()} year shared by {sel.country['name']} and the UK in World Bank data.")
+        return None
     if series[UK] and common != max(series[UK]):
-        facts.warn(f"Population comparison uses {common}, the latest year both countries have.")
+        facts.warn(f"{label} comparison uses {common}, the latest year both countries have.")
     if year - common >= STALE_YEARS:
-        facts.warn(f"Population latest World Bank year shared with the UK is {common}.")
-    facts.population = {"value": series[iso3][common], "uk_value": series[UK][common], "year": common}
+        facts.warn(f"{label} latest World Bank year shared with the UK is {common}.")
+    return {"value": series[iso3][common], "uk_value": series[UK][common], "year": common}
 
 
 def _gather_economy(sel: Selection, facts: Facts, iso3: str, place: str, candidates: list):
@@ -821,6 +894,25 @@ def _gather_economy(sel: Selection, facts: Facts, iso3: str, place: str, candida
         return {"indicator": indicator, "value": value, "year": obs_year}
     facts.warn(f"{place} economy fact unavailable (no data for {len(candidates)} indicators).")
     return None
+
+
+def _gather_uk_equivalent(sel: Selection, facts: Facts, econ: dict):
+    """The UK's value of Jamaica's indicator: {"value", "year"} for
+    Jamaica's year if the UK has it, else the UK's latest in the window;
+    "no_data" when the UK has none; "fetch_failed" (with a warning)."""
+    ind = econ["indicator"]
+    try:
+        rows = world_bank_rows([UK], ind["code"], f"date={econ['year'] - POPULATION_YEARS}:{sel.date.year}")
+    except FetchError as e:
+        facts.warn(f"UK figure for the Jamaica comparison unavailable ({e}).")
+        return "fetch_failed"
+    series = {year: value for iso3, year, value in rows if iso3 == UK and value is not None}
+    if not series:
+        return "no_data"
+    year = econ["year"] if econ["year"] in series else max(series)
+    if sel.date.year - year >= STALE_YEARS:
+        facts.warn(f"UK '{ind['label']}' (Jamaica comparison) latest World Bank value is from {year}.")
+    return {"value": series[year], "year": year}
 
 
 def _wiki(title: str, facts: Facts, label: str):
@@ -848,7 +940,8 @@ def _llm(call, facts: Facts, label: str):
 
 def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Facts:
     facts = Facts()
-    _gather_population(sel, facts)
+    facts.population = _gather_vs_uk(sel, facts, POPULATION, "Population")
+    facts.land = _gather_vs_uk(sel, facts, LAND_AREA, "Land area")
     flag_name = f"{slug(sel.date)}_flag.png"
     try:
         fetch_flag(sel.country["cca2"], os.path.join(INPUT_DIR, flag_name))
@@ -860,6 +953,8 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
     facts.research_wiki = _wiki(sel.research["wikipedia_title"], facts, "Research fact source")
     facts.uk_econ = _gather_economy(sel, facts, UK, "UK", sel.uk_indicators)
     facts.jm_econ = _gather_economy(sel, facts, JAMAICA, "Jamaica", sel.jm_indicators)
+    if facts.jm_econ:
+        facts.jm_uk = _gather_uk_equivalent(sel, facts, facts.jm_econ)
 
     if facts.country_wiki or facts.research_wiki:
         facts.prose = _llm(lambda: write_grounded_prose(
@@ -870,6 +965,13 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
                     facts, "AI Engineering writer (call B)")
     if facts.ai:
         print(f"AI topic: {facts.ai['topic_title']} ({len(facts.ai['sources'])} sources)", flush=True)
+    # Call D, once per comparison so each retries and degrades on its own.
+    if facts.land and sel.country["cca3"] != UK:
+        facts.land_comparison = _llm(lambda: write_comparison(*land_block(sel, facts), client=client),
+                                     facts, "Land area comparison (call D)")
+    if facts.jm_econ:
+        facts.jm_comparison = _llm(lambda: write_comparison(*economy_block(sel, facts), client=client),
+                                   facts, "Jamaica UK comparison (call D)")
     return facts
 
 
@@ -910,6 +1012,73 @@ def compare_to_uk(value: float, uk_value: float) -> str:
     return f"{pct:.2g}% of the UK's"
 
 
+def format_area(km2: float) -> str:
+    return f"{km2:,.0f} km²" if km2 >= 100 else f"{km2:.3g} km²"
+
+
+def _pct_text(pct: float) -> str:
+    """compare_to_uk's precision: whole numbers from 10, one decimal from 1,
+    otherwise two significant figures."""
+    if pct >= 10:
+        return f"{pct:,.0f}"
+    return f"{pct:.1f}" if pct >= 1 else f"{pct:.2g}"
+
+
+def land_relation(value: float, uk_value: float) -> str:
+    """Code-computed size difference, e.g. "96% smaller than the UK"."""
+    if value == uk_value:
+        return "the same size as the UK"
+    pct = abs(value / uk_value - 1) * 100
+    text = _pct_text(pct)
+    # A tiny country is never "100% smaller": add decimals until it is not.
+    decimals = 1
+    while value < uk_value and float(text.replace(",", "")) >= 100 and decimals <= 6:
+        text = f"{pct:.{decimals}f}"
+        decimals += 1
+    return f"{text}% {'smaller' if value < uk_value else 'larger'} than the UK"
+
+
+def economy_relation(value: float, uk_value: float, fmt: str) -> str:
+    """Code-computed comparison of Jamaica's figure with the UK's: a gap in
+    percentage points (between the displayed values) for % indicators."""
+    if fmt != "pct":
+        return compare_to_uk(value, uk_value)
+    gap = round(round(value, 1) - round(uk_value, 1), 1)
+    if gap == 0:
+        return "the same as the UK's"
+    return f"{abs(gap):.1f} percentage points {'higher' if gap > 0 else 'lower'} than the UK's"
+
+
+def land_block(sel: Selection, facts: Facts):
+    """(call D input, relation) for today's country's land area vs the UK's."""
+    land = facts.land
+    relation = land_relation(land["value"], land["uk_value"])
+    block = (f"COUNTRY: {sel.country['name']}\n"
+             f"LAND AREA: {format_area(land['value'])} ({land['year']})\n"
+             f"UK LAND AREA: {format_area(land['uk_value'])} ({land['year']})\n"
+             f"SIZE RATIO: {compare_to_uk(land['value'], land['uk_value'])}\n"
+             f"RELATION: {relation}")
+    return block, relation
+
+
+def economy_block(sel: Selection, facts: Facts):
+    """(call D input, relation or "") for Jamaica's indicator vs the UK's."""
+    econ, uk = facts.jm_econ, facts.jm_uk
+    ind = econ["indicator"]
+    block = (f"INDICATOR: {ind['label']}\n"
+             f"JAMAICA: {format_value(econ['value'], ind['format'])} ({econ['year']})\n")
+    if uk == "fetch_failed":
+        return block + "UK: the UK figure could not be retrieved today", ""
+    if uk == "no_data":
+        return (block + f"UK: no figure available in World Bank data for "
+                        f"{econ['year'] - POPULATION_YEARS}-{sel.date.year}"), ""
+    relation = economy_relation(econ["value"], uk["value"], ind["format"])
+    block += f"UK: {format_value(uk['value'], ind['format'])} ({uk['year']})\nRELATION: {relation}"
+    if uk["year"] != econ["year"]:
+        block += f"\nNOTE: the figures are from different years (Jamaica {econ['year']}, UK {uk['year']})"
+    return block, relation
+
+
 _UNAVAILABLE = "*Unavailable today:"
 
 
@@ -943,12 +1112,17 @@ def _flag_section(sel: Selection, facts: Facts) -> str:
         vs_uk = "— (this is the UK)" if c["cca3"] == UK else f"{compare_to_uk(p['value'], p['uk_value'])} ({p['year']})"
     else:
         population = vs_uk = "unavailable today"
+    land = f"{format_area(facts.land['value'])} ({facts.land['year']})" if facts.land else "unavailable today"
     lines += [f"| Country | {c['name']} |", "|---|---|",
               f"| Region | {region or '—'} |",
               f"| Capital | {', '.join(c['capital']) or '—'} |",
               f"| Currency | {', '.join(c['currencies']) or '—'} |",
               f"| Population | {population} |",
-              f"| vs UK | {vs_uk} |", ""]
+              f"| vs UK | {vs_uk} |",
+              f"| Land area | {land} |", ""]
+    if facts.land and c["cca3"] != UK:
+        lines += [f"**Size vs UK:** {facts.land_comparison}" if facts.land_comparison
+                  else "*UK comparison unavailable today.*", ""]
     blurb = (facts.prose or {}).get("country_blurb")
     if blurb and facts.country_wiki:
         lines += [_paragraphs(blurb), ""]
@@ -958,7 +1132,9 @@ def _flag_section(sel: Selection, facts: Facts) -> str:
     if blurb and facts.country_wiki:
         sources.append(f"[Wikipedia]({facts.country_wiki.url})")
     if facts.population:
-        sources.append(f"[World Bank population]({world_bank_url('SP.POP.TOTL', c['cca2'])})")
+        sources.append(f"[World Bank population]({world_bank_url(POPULATION, c['cca2'])})")
+    if facts.land:
+        sources.append(f"[World Bank land area]({world_bank_url(LAND_AREA, c['cca2'])})")
     if sources:
         lines.append("Sources: " + " · ".join(sources))
     return "\n".join(lines).rstrip()
@@ -984,13 +1160,21 @@ def _ai_section(sel: Selection, facts: Facts) -> str:
             f"### Why it matters\n\n{why}\n\n### Sources\n\n{sources}")
 
 
-def _economy_section(heading: str, econ: dict, cca2: str) -> str:
+def _economy_section(heading: str, econ: dict, cca2: str, facts: Facts = None) -> str:
+    """One economy fact. With facts (Jamaica only) it adds call D's UK
+    comparison and, when code found the UK figure, its source link."""
     if not econ:
         return f"## {heading}\n\n{_unavailable(heading.lower() + ' fact')}"
     ind = econ["indicator"]
+    vs_uk = source_uk = ""
+    if facts:
+        vs_uk = (f"**vs UK:** {facts.jm_comparison}" if facts.jm_comparison
+                 else "*UK comparison unavailable today.*") + "\n\n"
+        if isinstance(facts.jm_uk, dict):
+            source_uk = f" · UK figure: [World Bank — {ind['code']} (UK)]({world_bank_url(ind['code'], 'GB')})"
     return (f"## {heading}\n\n**{ind['label']}:** {format_value(econ['value'], ind['format'])} "
-            f"in {econ['year']}.\n\n{ind['meaning']}\n\n"
-            f"Source: [World Bank — {ind['code']}]({world_bank_url(ind['code'], cca2)})")
+            f"in {econ['year']}.\n\n{ind['meaning']}\n\n{vs_uk}"
+            f"Source: [World Bank — {ind['code']}]({world_bank_url(ind['code'], cca2)}){source_uk}")
 
 
 def render_sections(sel: Selection, facts: Facts) -> dict:
@@ -1000,7 +1184,7 @@ def render_sections(sel: Selection, facts: Facts) -> dict:
         "research": _research_section(sel, facts),
         "ai": _ai_section(sel, facts),
         "uk_economy": _economy_section("UK Economy", facts.uk_econ, "GB"),
-        "jamaica_economy": _economy_section("Jamaica Economy", facts.jm_econ, "JM"),
+        "jamaica_economy": _economy_section("Jamaica Economy", facts.jm_econ, "JM", facts),
     }
 
 
@@ -1050,7 +1234,11 @@ def assemble(date: datetime.date, box: str, body: str) -> str:
 def allowed_links(sel: Selection, facts: Facts, disagreements: list = ()) -> set:
     """Every link target code may put in the document, including the
     tool-validated sources of call C's disagreements."""
-    allowed = {world_bank_url("SP.POP.TOTL", sel.country["cca2"])}
+    allowed = {world_bank_url(POPULATION, sel.country["cca2"])}
+    if facts.land:
+        allowed.add(world_bank_url(LAND_AREA, sel.country["cca2"]))
+    if facts.jm_econ and isinstance(facts.jm_uk, dict):
+        allowed.add(world_bank_url(facts.jm_econ["indicator"]["code"], "GB"))
     if facts.flag_file:
         allowed.add(facts.flag_file)
     allowed.update(w.url for w in (facts.country_wiki, facts.research_wiki) if w)
