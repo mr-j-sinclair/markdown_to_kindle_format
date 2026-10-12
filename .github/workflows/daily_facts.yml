@@ -6,9 +6,15 @@ name: Daily Facts to Kindle
 
 on:
   schedule:
-    # 02:50 UK time (follows BST/GMT). Not on the hour: GitHub delays
-    # top-of-the-hour schedules most. Idempotent, so a rerun never resends.
-    - cron: "50 2 * * *"
+    # 02:50 UK time (follows BST/GMT) plus backup slots. GitHub schedules are
+    # best-effort: runs can be delayed by hours or not triggered at all (on
+    # 2026-10-12 the lone 02:50 slot had not run by 05:40), so later slots
+    # reduce missed days but cannot guarantee delivery. daily_facts.py
+    # skips a London date already recorded on the state branch (exit 10), so
+    # once delivery is recorded the backups are no-ops. The last slot, 17:50,
+    # keeps a delay of up to ~6 hours on the same London date.
+    # Not on the hour: GitHub delays top-of-the-hour schedules most.
+    - cron: "50 2,4,6,9,13,17 * * *"
       timezone: "Europe/London"
   workflow_dispatch:
     inputs:

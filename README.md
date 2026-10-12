@@ -355,12 +355,16 @@ cron (every 6h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
 
 `daily_facts.py` plus `.github/workflows/daily_facts.yml` email a short
 morning document, `daily_facts_YYYY-MM-DD.epub`, to your Kindle at 02:50 UK
-time every day. It has five sections: Flag of the Day, Research Fact, AI
+time every day, with backup runs at 04:50, 06:50, 09:50, 13:50 and 17:50.
+GitHub's scheduler is best-effort (runs can be hours late or skipped), so the
+backups make a missed day less likely; once delivery is recorded they exit
+as "already sent". It has five sections: Flag of the Day, Research Fact, AI
 Engineering topic, UK Economy, and Jamaica Economy. It is separate from the
 NTIY automation: its own workflow, concurrency group and state branch.
 
 ```text
-cron 02:50 -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
+cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
+           -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
            -> md_to_kindle.py (EPUB + Send to Kindle) -> record date on daily-facts-state
 ```
 

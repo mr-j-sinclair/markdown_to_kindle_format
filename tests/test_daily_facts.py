@@ -1306,5 +1306,25 @@ class MainTests(Base):
         self.assertIn("- Reranking", ai_req["input"])
 
 
+class WorkflowTests(unittest.TestCase):
+    def setUp(self):
+        workflow = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                ".github", "workflows", "daily_facts.yml")
+        with open(workflow, encoding="utf-8") as f:
+            self.text = f.read()
+
+    def test_schedule_has_backup_slots_within_one_london_day(self):
+        # The single slot was missed on 2026-10-12: GitHub schedules are best-effort.
+        slot = re.search(r'^\s+- cron: "50 ([\d,]+) \* \* \*"\n\s+timezone: "Europe/London"$',
+                         self.text, re.M)
+        self.assertIsNotNone(slot)
+        hours = {int(h) for h in slot.group(1).split(",")}
+        self.assertGreaterEqual(len(hours), 4)
+        self.assertLessEqual(max(hours), 18)
+
+    def test_workflow_success_code_matches_already_sent_constant(self):
+        self.assertIn(f'"$rc" -eq {df.EXIT_ALREADY_SENT} ]', self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
