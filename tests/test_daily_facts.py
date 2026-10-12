@@ -38,6 +38,30 @@ def wiki(title, extract="Some encyclopedic text."):
                        "content_urls": {"desktop": {"page": f"https://en.wikipedia.org/wiki/{title}"}}}).encode()
 
 
+def forecast(url, chances=None, **daily):
+    """An Open-Meteo answer for the URL's date: light rain, 20.0/13.4 °C and
+    rain likely 13:00-16:00 unless overridden."""
+    day = re.search(r"start_date=([\d-]+)", url).group(1)
+    chances = chances or [0] * 13 + [55, 64, 50, 40] + [0] * 7
+    values = {"time": [day], "weather_code": [61], "temperature_2m_max": [20.0], "temperature_2m_min": [13.4],
+              "precipitation_probability_max": [max(chances)], "sunrise": [f"{day}T07:20"],
+              "sunset": [f"{day}T18:11"]}
+    values.update({k: [v] for k, v in daily.items()})
+    return json.dumps({"daily": values, "hourly": {"time": [f"{day}T{h:02d}:00" for h in range(len(chances))],
+                                                   "precipitation_probability": chances}}).encode()
+
+
+def tfl_status(*statuses):
+    """A TfL Line/Status answer; no statuses means Good Service."""
+    statuses = statuses or ({"statusSeverityDescription": "Good Service", "validityPeriods": []},)
+    return json.dumps([{"id": "windrush", "lineStatuses": list(statuses)}]).encode()
+
+
+def closure(reason, start, end):
+    return {"statusSeverityDescription": "Part Closure", "reason": reason,
+            "validityPeriods": [{"fromDate": start, "toDate": end, "isNow": False}]}
+
+
 class FakeHTTP:
     """Routes http_get URLs to canned bytes or exceptions by substring."""
 
@@ -80,6 +104,8 @@ def default_routes(country_iso3="JAM"):
         "mrnev=1": latest,
         "country/GBR/indicator/": uk_series,
         "flagcdn.com": PNG,
+        "api.open-meteo.com": forecast,
+        "api.tfl.gov.uk": tfl_status(),
         "w/api.php": lead(),
         "wikipedia.org": lambda url: wiki(url.rsplit("/", 1)[1]),
     }
@@ -120,6 +146,14 @@ GOOD_B = {"topic_title": "Context rot", "concept": "Long contexts degrade recall
           "why_it_matters": ["It limits agent reliability."],
           "sources": [{"url": "https://example.com/Guide/Evals", "supports": "Recall degrades with length."}]}
 GOOD_C = {"status": "ok", "notes": [], "source_disagreements": []}
+GOOD_E = {"paragraph": "Today's weather is light rain, with a high of 20°C and a low of 13°C. Chances of rain "
+                       "are up to 64%. It will likely rain from 13:00 to 16:00. Sunrise is at 07:20 and sunset "
+                       "at 18:11."}
+RAIL_URL = "https://www.thameslinkrailway.com/travel-information/engineering-works"
+GOOD_F = {"status": "none_found", "summary": "", "sources": []}
+DISRUPTION_F = {"status": "disruption",
+                "summary": "No Thameslink trains run between Blackfriars and Elephant & Castle all day.",
+                "sources": [{"url": RAIL_URL, "supports": "Lists the closure on 10 October."}]}
 
 
 def echo_comparison(request):
@@ -165,7 +199,9 @@ def good_client():
     return FakeClient({"grounded_prose": [response(GOOD_A, tool_calls=[])],
                        "ai_lesson": [response(GOOD_B)],
                        "run_check": [response(GOOD_C, tool_calls=[])],
-                       "comparison": [echo_comparison]})
+                       "comparison": [echo_comparison],
+                       "weather": [response(GOOD_E, tool_calls=[])],
+                       "thameslink": [response(GOOD_F, tool_calls=[search_call(RAIL_URL)])]})
 
 
 class Base(unittest.TestCase):
@@ -454,8 +490,8 @@ class RenderTests(Base):
         markdown, warnings, _ = df.build_document(sel, facts, client=client)
         lines = markdown.splitlines()
         self.assertTrue(lines[0].startswith("# Daily Facts"))
-        self.assertEqual(lines[1], "")
-        self.assertTrue(lines[2].startswith("> **Run check — warning:** UK value looks odd."))
+        self.assertEqual(lines[1:4], ["", "Today is Saturday 10th October 2026.", ""])
+        self.assertTrue(lines[4].startswith("> **Run check — warning:** UK value looks odd."))
         self.assertIn("UK value looks odd.", warnings)
 
     def test_warning_status_without_notes_still_shows_box(self):
@@ -466,7 +502,7 @@ class RenderTests(Base):
             client = good_client()
             client.answers["run_check"] = [response(dict(GOOD_C, status="warning"), tool_calls=[])]
             markdown, _, _ = df.build_document(sel, facts, client=client)
-            self.assertEqual(markdown.splitlines()[2], f"> **Run check — warning:** {headline}")
+            self.assertEqual(markdown.splitlines()[4], f"> **Run check — warning:** {headline}")
 
 
 # ---------- degradation ----------
@@ -500,7 +536,7 @@ class DegradationTests(Base):
             sel, facts = self.gather(client=client)
             self.assertIsNotNone(facts.country_wiki)
             body = df.render_body(sel, facts)
-            flag = body.split("\n## ", 1)[0]
+            flag = body.split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
             self.assertIn("| Population | 2.8 million (2024) |", flag)
             self.assertIn("*Unavailable today: the country description.", flag)
             self.assertNotIn("[Wikipedia]", flag)
@@ -795,7 +831,7 @@ class DisagreementTests(Base):
         markdown, warnings, _ = df.build_document(
             sel, facts, client=self.review_client(("research", HAMMING), ("uk_economy", "Looks low.")))
         lines = markdown.splitlines()
-        self.assertEqual(lines[2], "> **Run check — warning:** AI reviewer disagrees with a sourced claim in: "
+        self.assertEqual(lines[4], "> **Run check — warning:** AI reviewer disagrees with a sourced claim in: "
                                    "Research Fact, UK Economy.")
         self.assertEqual(warnings, [])
 
@@ -906,7 +942,7 @@ class DisagreementTests(Base):
         facts.diagnostics.clear()
         with contextlib.redirect_stderr(io.StringIO()):
             markdown, warnings, disagreements = df.build_document(sel, facts, client=client)
-        self.assertEqual(markdown.splitlines()[2], "> **Run check — warning:** UK value looks odd.")
+        self.assertEqual(markdown.splitlines()[4], "> **Run check — warning:** UK value looks odd.")
         self.assertEqual((warnings, disagreements), (["UK value looks odd."], []))
 
     def test_empty_warning_without_disagreements_keeps_generic_warning(self):
@@ -915,7 +951,7 @@ class DisagreementTests(Base):
         sel, facts = self.gather()
         facts.diagnostics.clear()
         markdown, warnings, _ = df.build_document(sel, facts, client=client)
-        self.assertEqual(markdown.splitlines()[2],
+        self.assertEqual(markdown.splitlines()[4],
                          "> **Run check — warning:** the reviewer flagged a problem but gave no details.")
         self.assertEqual(warnings, ["Run check flagged a problem without details."])
         self.assertEqual([r["text"]["format"]["name"] for r in client.requests], ["run_check"])  # no source check
@@ -1181,7 +1217,7 @@ class ComparisonTests(Base):
         inputs = [r["input"] for r in self.comparison_requests(client)]
         self.assertEqual(len(inputs), 1)
         self.assertTrue(inputs[0].startswith("INDICATOR:"))
-        flag = df.render_body(sel, facts).split("\n## ", 1)[0]
+        flag = df.render_body(sel, facts).split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
         self.assertIn("| Land area | 241,930 km² (2024) |", flag)
         self.assertNotIn("vs UK:**", flag)
         self.assertNotIn("UK comparison unavailable", flag)
@@ -1194,6 +1230,399 @@ class ComparisonTests(Base):
         _, facts = self.gather(routes)
         self.assertEqual(facts.land, {"value": 10_830, "uk_value": 241_930, "year": 2023})
         self.assertIn("Land area comparison uses 2023, the latest year both countries have.", facts.diagnostics)
+
+
+# ---------- tomorrow's date + date line ----------
+
+class TargetDateTests(Base):
+    def test_target_is_tomorrow_across_month_and_year(self):
+        for today, tomorrow in ((datetime.date(2026, 10, 12), datetime.date(2026, 10, 13)),
+                                (datetime.date(2026, 10, 31), datetime.date(2026, 11, 1)),
+                                (datetime.date(2026, 12, 31), datetime.date(2027, 1, 1))):
+            with patch.object(df, "today_london", return_value=today):
+                self.assertEqual(df.target_date(), tomorrow)
+
+    def test_main_without_date_builds_and_records_tomorrow(self):
+        state_path = os.path.join(self.tmp, "state.json")
+        df.save_state(state_path, {"sent": {"2026-10-12": {"ai_topic": "x"}}})
+        with patch.object(df, "today_london", return_value=datetime.date(2026, 10, 12)), \
+                patch.object(df, "http_get", FakeHTTP(default_routes())), \
+                patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertEqual(df.main(["--state", state_path], client=good_client()), df.EXIT_SENT)
+        self.assertIn("2026-10-13", df.load_state(state_path)["sent"])
+        self.assertTrue(run.call_args.args[0][2].endswith("daily_facts_2026-10-13.md"))
+        with open(os.path.join(df.INPUT_DIR, "daily_facts_2026-10-13.md"), encoding="utf-8") as f:
+            self.assertTrue(f.read().startswith("# Daily Facts — Tuesday 13 October 2026\n\n"
+                                                "Today is Tuesday 13th October 2026.\n"))
+
+    def test_date_line_ordinals(self):
+        for day, text in ((1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (11, "11th"), (12, "12th"),
+                          (13, "13th"), (21, "21st"), (22, "22nd"), (23, "23rd"), (31, "31st")):
+            self.assertIn(f" {text} ", df.date_line(datetime.date(2026, 10, day)))
+        self.assertEqual(df.date_line(datetime.date(2026, 10, 13)), "Today is Tuesday 13th October 2026.")
+
+
+# ---------- weather (Open-Meteo + call E) ----------
+
+WEATHER = {"description": "light rain", "high": "20°C", "low": "13°C", "rain_chance": "64%",
+           "rain_ranges": ["13:00 to 16:00"], "sunrise": "07:20", "sunset": "18:11"}
+
+
+def weather_client(*paragraphs):
+    return FakeClient({"weather": [response({"paragraph": p}, tool_calls=[]) for p in paragraphs]})
+
+
+class WeatherTests(Base):
+    def fetch(self, route=forecast):
+        with patch.object(df, "http_get", FakeHTTP({"api.open-meteo.com": route})):
+            return df.croydon_weather(DATE)
+
+    def test_forecast_becomes_code_strings(self):
+        self.assertEqual(self.fetch(), WEATHER)
+
+    def test_rain_ranges(self):
+        hours = [f"2026-10-10T{h:02d}:00" for h in range(24)]
+        chances = [0] * 24
+        self.assertEqual(df.rain_ranges(hours, chances), [])
+        for h in (6, 7, 13, 14, 15, 23):
+            chances[h] = 50                     # 50% counts as likely; 49% does not
+        chances[9] = 49
+        self.assertEqual(df.rain_ranges(hours, chances), ["06:00 to 08:00", "13:00 to 16:00", "23:00 to midnight"])
+        # Clocks going back: the repeated 01:00 hour stays one run.
+        fall_back = ["2026-10-25T00:00", "2026-10-25T01:00", "2026-10-25T01:00", "2026-10-25T02:00"]
+        self.assertEqual(df.rain_ranges(fall_back, [60, 60, 60, 0]), ["00:00 to 02:00"])
+        # Clocks going forward: 01:00 does not exist, so 00:00 then 02:00 are consecutive...
+        spring = [f"2026-03-29T{h:02d}:00" for h in (0, 2, 3, 4)]
+        self.assertEqual(df.rain_ranges(spring, [60, 60, 0, 60]), ["00:00 to 03:00", "04:00 to 05:00"])
+        # ...but a real one-hour gap on an ordinary day is not.
+        ordinary = [f"2026-10-10T{h:02d}:00" for h in (0, 2)]
+        self.assertEqual(df.rain_ranges(ordinary, [60, 60]), ["00:00 to 01:00", "02:00 to 03:00"])
+
+    def test_london_hours(self):
+        self.assertEqual(df.london_hours(datetime.date(2026, 10, 10)), list(range(24)))
+        self.assertEqual(df.london_hours(datetime.date(2026, 3, 29)), [0] + list(range(2, 24)))
+        self.assertEqual(df.london_hours(datetime.date(2026, 10, 25)), list(range(24)))
+
+    def test_hourly_coverage_required(self):
+        def hourly(url, hours, chances):
+            data = json.loads(forecast(url))
+            day = data["daily"]["time"][0]
+            data["hourly"] = {"time": [f"{day}T{h:02d}:00" for h in hours], "precipitation_probability": chances}
+            return json.dumps(data).encode()
+        for hours, chances in ((range(23), [0] * 23),                 # 23:00 missing on an ordinary day
+                               (range(24), [0] * 23 + [None]),        # one hour without a value
+                               (range(24), [0] * 23),                 # values shorter than times
+                               (range(24), [0] * 23 + ["10"]),        # non-numeric
+                               ([], [])):                              # no hourly data at all
+            with self.assertRaises(df.FetchError, msg=(list(hours), chances)):
+                self.fetch(lambda url: hourly(url, hours, chances))
+        # A spring-forward day is complete without the non-existent 01:00.
+        spring = [0] + list(range(2, 24))
+        with patch.object(df, "http_get", FakeHTTP({"api.open-meteo.com": lambda url: hourly(
+                url.replace("2026-10-10", "2026-03-29"), spring, [0] * 23)})):
+            self.assertEqual(df.croydon_weather(datetime.date(2026, 3, 29))["rain_ranges"], [])
+
+    def test_temperatures_rounded_half_up(self):
+        w = self.fetch(lambda url: forecast(url, temperature_2m_max=12.5, temperature_2m_min=-0.4))
+        self.assertEqual((w["high"], w["low"]), ("13°C", "0°C"))
+
+    def test_no_rain_hours(self):
+        self.assertEqual(self.fetch(lambda url: forecast(url, chances=[10] * 24))["rain_ranges"], [])
+
+    def test_malformed_forecast_is_fetch_error(self):
+        for bad in (lambda url: forecast(url, temperature_2m_max=None), lambda url: forecast(url, weather_code=7),
+                    lambda url: forecast(url, sunrise="2026-10-11T07:20"),
+                    lambda url: forecast(url, chances=[None] * 24),
+                    lambda url: json.dumps({"daily": {}}).encode(),
+                    lambda url: forecast(url, time="2026-10-11")):
+            with self.assertRaises(df.FetchError):
+                self.fetch(bad)
+
+    def test_call_e_accepts_grounded_paragraph(self):
+        client = weather_client(GOOD_E["paragraph"])
+        self.assertEqual(df.write_weather(WEATHER, client=client), GOOD_E["paragraph"])
+        req = client.requests[0]
+        for key in ("tools", "tool_choice", "include"):
+            self.assertNotIn(key, req)
+        self.assertIn("RAIN LIKELY: 13:00 to 16:00", req["input"])
+        self.assertIn("SUNRISE: 07:20", req["input"])
+
+    def test_call_e_guards(self):
+        good = GOOD_E["paragraph"]
+        for bad in (good.replace("07:20", "around dawn"),             # sunrise missing
+                    good.replace("20°C", "21°C"),                       # changed number
+                    good.replace("from 13:00 to 16:00", "in the afternoon"),  # range missing
+                    good.replace("light rain", "sunshine"),            # conditions changed
+                    good + " Expect 5 mm.",                            # invented number
+                    good + " Stay dry" * 20,                           # over 70 words
+                    good + " See https://evil.example"):
+            with self.assertRaises(df.LLMError, msg=bad):
+                df.write_weather(WEATHER, client=weather_client(bad))
+        dry = dict(WEATHER, rain_ranges=[])
+        with self.assertRaises(df.LLMError):   # the no-rain phrase is required when no hour is likely
+            df.write_weather(dry, client=weather_client(good.replace("It will likely rain from 13:00 to 16:00.", "")))
+        self.assertTrue(df.write_weather(dry, client=weather_client(
+            good.replace("It will likely rain from 13:00 to 16:00.",
+                         "No single hour is more likely than not to see rain."))))
+
+    def test_rendered_with_source(self):
+        sel, facts = self.gather()
+        weather = df.render_sections(sel, facts)["weather"]
+        self.assertEqual(weather, f"## Weather in Croydon\n\n{GOOD_E['paragraph']}\n\n"
+                                  f"Source: [Open-Meteo]({df.OPEN_METEO_URL})")
+
+    def test_call_e_failure_uses_code_sentence(self):
+        client = good_client()
+        client.answers["weather"] = [RuntimeError("down")]
+        sel, facts = self.gather(client=client)
+        weather = df.render_sections(sel, facts)["weather"]
+        self.assertIn(df.weather_sentence(WEATHER), weather)
+        self.assertEqual(df.weather_sentence(WEATHER), GOOD_E["paragraph"])
+        self.assertTrue(any("Weather writer (call E) failed twice" in d for d in facts.diagnostics))
+        self.assertEqual(df.weather_sentence(dict(WEATHER, rain_ranges=["06:00 to 08:00", "13:00 to 16:00"])).count(
+            "It will likely rain from 06:00 to 08:00 and from 13:00 to 16:00."), 1)
+
+    def test_fetch_failure_is_unavailable_and_others_render(self):
+        routes = default_routes()
+        routes["api.open-meteo.com"] = TimeoutError()
+        client = good_client()
+        sel, facts = self.gather(routes, client=client)
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        self.assertIn("*Unavailable today: the Croydon weather forecast.", markdown)
+        self.assertNotIn(df.OPEN_METEO_URL, markdown)
+        self.assertIn("Croydon weather unavailable (Open-Meteo forecast: TimeoutError).", facts.diagnostics)
+        self.assertFalse(any(r["text"]["format"]["name"] == "weather" for r in client.requests))
+        self.assertIn("No planned disruption listed by TfL.", markdown)
+        self.assertIn("## AI Engineering: Context rot", markdown)
+
+
+# ---------- trains (TfL Windrush + call F Thameslink) ----------
+
+FIRST = "WINDRUSH LINE: Sunday 18 October, from 2200, no service between Surrey Quays and New Cross."
+
+
+class WindrushTests(Base):
+    def status(self, date, *statuses):
+        with patch.object(df, "http_get", FakeHTTP({"api.tfl.gov.uk": tfl_status(*statuses)})):
+            return df.windrush_status(date)
+
+    def on(self, date, start, end):
+        return self.status(date, closure(FIRST, start, end))["notices"] == [FIRST]
+
+    def test_requests_a_range_around_the_date(self):
+        http = FakeHTTP({"api.tfl.gov.uk": tfl_status()})
+        with patch.object(df, "http_get", http):
+            df.windrush_status(datetime.date(2026, 10, 13))
+        self.assertIn("/Line/windrush/Status/2026-10-12T00:00:00/to/2026-10-14T23:59:59", http.calls[0])
+
+    def test_bst_day_and_overnight_period(self):
+        start, end = "2026-10-18T21:00:00Z", "2026-10-19T00:29:00Z"   # 22:00 to 01:29 London time
+        self.assertFalse(self.on(datetime.date(2026, 10, 17), start, end))
+        self.assertTrue(self.on(datetime.date(2026, 10, 18), start, end))
+        self.assertTrue(self.on(datetime.date(2026, 10, 19), start, end))
+        self.assertFalse(self.on(datetime.date(2026, 10, 20), start, end))
+
+    def test_exact_london_midnight_is_a_half_open_boundary(self):
+        # BST: London midnight starting 14 October is 23:00 UTC on the 13th.
+        self.assertTrue(self.on(datetime.date(2026, 10, 13), "2026-10-13T22:00:00Z", "2026-10-13T23:00:00Z"))
+        self.assertFalse(self.on(datetime.date(2026, 10, 14), "2026-10-13T22:00:00Z", "2026-10-13T23:00:00Z"))
+        self.assertTrue(self.on(datetime.date(2026, 10, 14), "2026-10-13T23:00:00Z", "2026-10-14T01:00:00Z"))
+        # GMT: London midnight is UTC midnight.
+        self.assertTrue(self.on(datetime.date(2026, 11, 9), "2026-11-09T23:30:00Z", "2026-11-10T00:00:00Z"))
+        self.assertFalse(self.on(datetime.date(2026, 11, 10), "2026-11-09T23:30:00Z", "2026-11-10T00:00:00Z"))
+
+    def test_dst_transition_days(self):
+        # 29 March 2026 (23 hours): 00:00 UTC to 23:00 UTC.
+        spring = datetime.date(2026, 3, 29)
+        self.assertTrue(self.on(spring, "2026-03-28T23:30:00Z", "2026-03-29T00:30:00Z"))
+        self.assertTrue(self.on(spring, "2026-03-29T22:30:00Z", "2026-03-29T23:00:00Z"))
+        self.assertFalse(self.on(spring, "2026-03-29T23:00:00Z", "2026-03-30T01:00:00Z"))
+        # 25 October 2026 (25 hours): 23:00 UTC on the 24th to 00:00 UTC on the 26th.
+        autumn = datetime.date(2026, 10, 25)
+        self.assertFalse(self.on(autumn, "2026-10-24T22:30:00Z", "2026-10-24T23:00:00Z"))
+        self.assertTrue(self.on(autumn, "2026-10-24T23:00:00Z", "2026-10-24T23:30:00Z"))
+        self.assertTrue(self.on(autumn, "2026-10-25T23:30:00Z", "2026-10-26T00:00:00Z"))
+        self.assertFalse(self.on(autumn, "2026-10-26T00:00:00Z", "2026-10-26T01:00:00Z"))
+
+    def test_naive_timestamps_are_utc(self):
+        self.assertFalse(self.on(datetime.date(2026, 10, 14), "2026-10-13T22:00:00", "2026-10-13T23:00:00"))
+        self.assertTrue(self.on(datetime.date(2026, 10, 13), "2026-10-13T22:00:00", "2026-10-13T23:00:00"))
+
+    def test_good_service_dedupe_and_no_period_statuses(self):
+        day = datetime.date(2026, 10, 18)
+        result = self.status(day, {"statusSeverityDescription": "Good Service", "validityPeriods": []},
+                             closure(FIRST, "2026-10-18T21:00:00Z", "2026-10-19T00:29:00Z"),
+                             closure("  WINDRUSH LINE: Sunday 18 October,\n from 2200, no service between "
+                                     "Surrey Quays and New Cross. ", "2026-10-18T21:00:00Z", "2026-10-19T00:29:00Z"),
+                             {"statusSeverityDescription": "Minor Delays", "reason": "Signal failure at Dalston.",
+                              "validityPeriods": []})
+        self.assertEqual(result, {"notices": [FIRST, "Signal failure at Dalston."], "dropped": 0})
+        self.assertEqual(self.status(day), {"notices": [], "dropped": 0})
+
+    def test_line_break_notice_kept_verbatim_in_one_bullet(self):
+        # Real TfL shape (26-29 October 2026): a "\r\n" between sentences.
+        multi = ("WINDRUSH LINE: Monday 26 October, after 2330, no service between New Cross Gate and West "
+                 "Croydon. Alternatively, use local buses. \r\nThe 2232 train will divert to Crystal Palace.")
+        period = ("2026-10-26T23:30:00Z", "2026-10-27T01:00:00Z")
+        result = self.status(datetime.date(2026, 10, 27), closure(multi, *period), closure(FIRST, *period))
+        self.assertEqual(result, {"notices": [multi, FIRST], "dropped": 0})
+        sel = df.select(datetime.date(2026, 10, 27), self.data)
+        facts = df.Facts(windrush=result)
+        soup, _ = df.converter_view(df.render_sections(sel, facts)["trains"])
+        items = [li.get_text() for li in soup.find_all("li")]
+        self.assertEqual(len(items), 2)
+        self.assertIn("Alternatively, use local buses.", items[0])
+        self.assertIn("The 2232 train will divert to Crystal Palace.", items[0])
+
+    def test_line_breaks_that_break_the_bullet_are_dropped(self):
+        period = ("2026-10-18T21:00:00Z", "2026-10-19T00:29:00Z")
+        bad = ["Closed.\r\n\r\nUse buses.", "Closed.\r\n# Heading", "Closed.\r\n- Another item",
+               "Closed.\r\n> Quoted"]
+        result = self.status(datetime.date(2026, 10, 18), *(closure(b, *period) for b in bad))
+        self.assertEqual(result, {"notices": [], "dropped": len(bad)})
+
+    def test_bad_notices_are_counted_never_rewritten(self):
+        day = datetime.date(2026, 10, 18)
+        period = ("2026-10-18T21:00:00Z", "2026-10-19T00:29:00Z")
+        bad = [closure("Details at https://tfl.gov.uk/x", *period), closure("See [here](/x).", *period),
+               closure("Fares cost $x^2$ today.", *period), closure("<b>Closed</b>", *period),
+               {"statusSeverityDescription": "Part Closure", "validityPeriods": []},          # no reason
+               closure(FIRST, "not a date", period[1]),                                         # malformed period
+               {"statusSeverityDescription": "Part Closure", "reason": FIRST,
+                "validityPeriods": [{"fromDate": period[0]}]}]                                  # missing toDate
+        result = self.status(day, closure(FIRST, *period), *bad)
+        self.assertEqual(result, {"notices": [FIRST], "dropped": len(bad)})
+
+    def test_shape_error_is_fetch_error(self):
+        with patch.object(df, "http_get", FakeHTTP({"api.tfl.gov.uk": b'{"message": "bad request"}'})):
+            with self.assertRaises(df.FetchError):
+                df.windrush_status(DATE)
+
+    def windrush_text(self, routes):
+        sel, facts = self.gather(routes)
+        return facts, df.render_sections(sel, facts)["trains"].split("### Thameslink", 1)[0]
+
+    def test_rendering(self):
+        routes = default_routes()
+        routes["api.tfl.gov.uk"] = tfl_status(closure(FIRST, "2026-10-10T10:00:00Z", "2026-10-10T12:00:00Z"))
+        _, text = self.windrush_text(routes)
+        self.assertIn(f"\n- {FIRST}\n", text)
+        self.assertNotIn("No planned disruption", text)
+        self.assertIn(f"Source: [TfL line status]({df.TFL_STATUS_URL})", text)
+
+    def test_dropped_notice_is_never_no_disruption(self):
+        routes = default_routes()
+        routes["api.tfl.gov.uk"] = tfl_status(closure("See https://x.example", "2026-10-10T10:00:00Z",
+                                                      "2026-10-10T12:00:00Z"))
+        facts, text = self.windrush_text(routes)
+        self.assertIn("*Some TfL notices could not be shown; check the TfL status page.*", text)
+        self.assertNotIn("No planned disruption", text)
+        self.assertNotIn("x.example", text)
+        self.assertTrue(any("TfL Windrush notice(s) left out" in d for d in facts.diagnostics))
+
+    def test_any_failure_degrades_only_windrush(self):
+        for routes_patch, reason in ((TimeoutError(), "TfL Windrush status: TimeoutError"),
+                                     (b"[]", "TfL Windrush status: unexpected response shape")):
+            routes = default_routes()
+            routes["api.tfl.gov.uk"] = routes_patch
+            client = good_client()
+            sel, facts = self.gather(routes, client=client)
+            markdown, _, _ = df.build_document(sel, facts, client=client)
+            self.assertIn("*Unavailable today: the Windrush line status.", markdown)
+            self.assertIn(f"Windrush line status unavailable ({reason}).", facts.diagnostics)
+            self.assertIn("An AI web search found no notice", markdown)
+            self.assertIn(GOOD_E["paragraph"], markdown)
+        with patch.object(df, "windrush_status", side_effect=KeyError("x")):   # not a FetchError
+            _, facts = self.gather()
+        self.assertIsNone(facts.windrush)
+        self.assertIn("Windrush line status unavailable (KeyError).", facts.diagnostics)
+
+
+class ThameslinkTests(Base):
+    def check(self, payload, tool_calls=None):
+        client = FakeClient({"thameslink": [response(payload, tool_calls=[search_call(RAIL_URL)]
+                                                     if tool_calls is None else tool_calls)]})
+        return df.thameslink_disruptions(DATE, client=client), client
+
+    def test_request_shape(self):
+        _, client = self.check(GOOD_F)
+        req = client.requests[0]
+        self.assertEqual(req["tools"], [{"type": "web_search"}])
+        self.assertEqual(req["tool_choice"], "required")
+        self.assertEqual(req["max_tool_calls"], 2)
+        self.assertEqual(req["include"], ["web_search_call.action.sources"])
+        self.assertEqual(req["timeout"], 120)
+        self.assertIn("Saturday 10 October 2026 (2026-10-10)", req["input"])
+
+    def test_none_found_discards_summary_and_sources(self):
+        result, _ = self.check(dict(GOOD_F, summary="Ignored.", sources=[{"url": RAIL_URL, "supports": "x"}]))
+        self.assertEqual(result, {"status": "none_found", "summary": "", "sources": [],
+                                  "search_actions": {"search": 1}})
+
+    def test_disruption_needs_a_validated_source(self):
+        result, _ = self.check(DISRUPTION_F)
+        self.assertEqual(result["sources"], [{"url": RAIL_URL, "supports": "Lists the closure on 10 October."}])
+        for payload, tool_calls in ((dict(DISRUPTION_F, sources=[{"url": "https://made-up.example/x",
+                                                                  "supports": "x"}]), None),
+                                    (dict(DISRUPTION_F, sources=[]), None),
+                                    (dict(DISRUPTION_F, summary=""), None),
+                                    (dict(DISRUPTION_F, summary="See https://evil.example"), None),
+                                    (dict(DISRUPTION_F, summary="word " * 71), None),
+                                    (DISRUPTION_F, [])):                                   # never searched
+            with self.assertRaises(df.LLMError), contextlib.redirect_stderr(io.StringIO()):
+                self.check(payload, tool_calls)
+
+    def trains(self, client):
+        sel, facts = self.gather(client=client)
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        return sel, facts, markdown, markdown.split("### Thameslink", 1)[1].split("\n## ", 1)[0]
+
+    def test_none_found_rendering(self):
+        _, _, _, text = self.trains(good_client())
+        self.assertIn("*An AI web search found no notice of planned Thameslink disruption for Saturday 10 "
+                      "October. This is not a guarantee; check before travelling.*", text)
+        self.assertNotIn("No planned disruption", text)
+        self.assertIn(f"Check: [National Rail status and disruptions]({df.NATIONAL_RAIL_URL})", text)
+
+    def test_disruption_rendering_and_links(self):
+        client = good_client()
+        client.answers["thameslink"] = [response(DISRUPTION_F, tool_calls=[search_call(RAIL_URL)])]
+        sel, facts, markdown, text = self.trains(client)
+        self.assertIn(DISRUPTION_F["summary"] + "\n\n*From an AI web search; may be incomplete or wrong. "
+                      "Check before travelling.*", text)
+        self.assertIn(f"- [thameslinkrailway.com/travel-information/engineering-works]({RAIL_URL})", text)
+        links = set(df.rendered_links(df.converter_view(markdown)[0]))
+        self.assertEqual(links, df.allowed_links(sel, facts))
+        for url in (RAIL_URL, df.NATIONAL_RAIL_URL, df.TFL_STATUS_URL, df.OPEN_METEO_URL):
+            self.assertIn(url, links)
+
+    def test_failure_degrades_only_thameslink(self):
+        client = good_client()
+        client.answers["thameslink"] = [RuntimeError("down")]
+        _, facts, markdown, text = self.trains(client)
+        self.assertIn("*Unavailable today: the Thameslink check.", text)
+        self.assertIn(f"Check: [National Rail status and disruptions]({df.NATIONAL_RAIL_URL})", text)
+        self.assertIn("No planned disruption listed by TfL.", markdown)
+        self.assertTrue(any("Thameslink check (call F) failed twice" in d for d in facts.diagnostics))
+
+    def test_search_actions_recorded_in_state(self):
+        state_path = os.path.join(self.tmp, "state.json")
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), \
+                patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+            df.main(["--date", "2026-10-10", "--state", state_path], client=good_client())
+        entry = df.load_state(state_path)["sent"]["2026-10-10"]
+        self.assertEqual((entry["thameslink_status"], entry["thameslink_search_actions"]),
+                         ("none_found", {"search": 1}))
+
+    def test_reviewer_may_dispute_new_sections(self):
+        client = with_disagreements(good_client(), ("weather", "Disputed forecast."))
+        sel, facts = self.gather(client=client)
+        markdown, _, disagreements = df.build_document(sel, facts, client=client)
+        weather = markdown.split("## Weather in Croydon", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("AI reviewer note:** Disputed forecast.", weather)
+        self.assertIn("Weather in Croydon.", markdown.split("\n\n## ", 1)[0])
+        self.assertIn("trains", client.requests[-2]["text"]["format"]["schema"]["properties"]
+                      ["source_disagreements"]["items"]["properties"]["section"]["enum"])
 
 
 # ---------- orchestration ----------

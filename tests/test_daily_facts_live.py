@@ -1,5 +1,5 @@
 """Opt-in live smoke tests for daily_facts.py: real World Bank, Wikipedia,
-flagcdn and OpenAI calls (a few cents per run). Skipped unless
+flagcdn, Open-Meteo, TfL and OpenAI calls (a few cents per run). Skipped unless
 DAILY_FACTS_LIVE=1, so the default test run and CI never make them. Run:
 
   OPENAI_API_KEY="$(security find-generic-password -s openai-api-key -w)" \\
@@ -8,7 +8,10 @@ DAILY_FACTS_LIVE=1, so the default test run and CI never make them. Run:
 DAILY_FACTS_LIVE_DATE (default 2026-10-11: Argentina, larger than the UK)
 picks the day; DAILY_FACTS_LIVE_OUT (default: a new temporary directory,
 kept) holds the full day's Markdown and EPUB. The full-day run is a
---preview, so nothing is sent and no real state is touched."""
+--preview, so nothing is sent and no real state is touched. Calls E
+(weather) and F (Thameslink) are also checked on their own for tomorrow.
+Open-Meteo also serves recent past dates, but a DAILY_FACTS_LIVE_DATE far
+in the past may leave the full day's weather unavailable."""
 
 import datetime
 import os
@@ -24,7 +27,7 @@ import daily_facts as df
 LIVE = os.environ.get("DAILY_FACTS_LIVE") == "1"
 # Parsed only when live, so a bad value cannot break ordinary discovery.
 DATE = datetime.date.fromisoformat(os.environ.get("DAILY_FACTS_LIVE_DATE", "2026-10-11")) if LIVE else None
-HEADINGS = ("## Flag of the Day", "## Research Fact", "## AI Engineering", "## UK Economy", "## Jamaica Economy")
+HEADINGS = ("## Weather in Croydon", "## Trains", "### Windrush line", "### Thameslink", "## Flag of the Day", "## Research Fact", "## AI Engineering", "## UK Economy", "## Jamaica Economy")
 
 
 def setUpModule():
@@ -78,6 +81,29 @@ class LiveComparisonTests(unittest.TestCase):
         block, relation = df.economy_block(self.sel, facts)
         self.assertEqual(relation, "")
         self.sentence(block, relation)
+
+
+@unittest.skipUnless(LIVE, "live smoke tests: set DAILY_FACTS_LIVE=1")
+class LiveWeatherAndTrainsTests(unittest.TestCase):
+    """Call E over a real Open-Meteo forecast and call F's real web search,
+    both for tomorrow (forecasts and planned works only exist ahead)."""
+
+    def setUp(self):
+        self.date = df.target_date()
+
+    def test_weather_paragraph(self):
+        weather = df.croydon_weather(self.date)
+        paragraph = df.write_weather(weather, client=df._openai_client())  # raises if guards fail
+        print(f"\n{df.weather_block(weather)}\n-> {paragraph}")
+        self.assertIn(weather["sunrise"], paragraph)
+
+    def test_thameslink_check(self):
+        result = df.thameslink_disruptions(self.date, client=df._openai_client())  # raises if unvalidated
+        print(f"\n{self.date}: {result}")
+        self.assertIn(result["status"], ("disruption", "none_found"))
+        self.assertTrue(result["search_actions"])
+        if result["status"] == "disruption":
+            self.assertTrue(result["summary"] and result["sources"])
 
 
 @unittest.skipUnless(LIVE, "live smoke tests: set DAILY_FACTS_LIVE=1")

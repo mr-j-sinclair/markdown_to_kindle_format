@@ -356,15 +356,24 @@ cron (every 6h) -> ntiy_feed.py --next -> inputs/ntiy-day-NNN-<ref>.html
 `daily_facts.py` plus `.github/workflows/daily_facts.yml` email a short
 morning document, `daily_facts_YYYY-MM-DD.epub`, to your Kindle at 02:50 UK
 time every day, with backup runs at 04:50, 06:50, 09:50, 13:50 and 17:50.
-GitHub's scheduler is best-effort (runs can be hours late or skipped), so the
-backups make a missed day less likely; once delivery is recorded they exit
-as "already sent". It has five sections: Flag of the Day, Research Fact, AI
-Engineering topic, UK Economy, and Jamaica Economy. It is separate from the
-NTIY automation: its own workflow, concurrency group and state branch.
+Each run builds **tomorrow's** document (the London date at run time plus
+one day), so it is already on the Kindle when the reader wakes up, even if
+GitHub runs it hours late. GitHub's scheduler is best-effort (runs can be
+hours late or skipped), so the backups make a missed day less likely; once
+delivery is recorded they exit as "already sent". A run that starts after
+London midnight targets the following day; with the 17:50 last slot that
+only happens if GitHub delays it by more than about 6 hours. Backfill a
+missed date locally with `--date`.
+
+Under the title is a date line ("Today is Tuesday 13th October 2026."). It
+has seven sections: Weather in Croydon, Trains, Flag of the Day, Research
+Fact, AI Engineering topic, UK Economy, and Jamaica Economy. It is separate
+from the NTIY automation: its own workflow, concurrency group and state
+branch.
 
 ```text
 cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
-           -> daily_facts.py -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
+           -> daily_facts.py (tomorrow's date) -> inputs/daily_facts_YYYY-MM-DD.md (+ _flag.png)
            -> md_to_kindle.py (EPUB + Send to Kindle) -> record date on daily-facts-state
 ```
 
@@ -381,7 +390,23 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
   also fetched for the UK, for Jamaica's year if the UK has it, otherwise the
   UK's latest. Flags come from
   [flagcdn](https://flagcdn.com/) and are embedded locally. Article
-  summaries come from the Wikipedia REST API. None of these needs a key.
+  summaries come from the Wikipedia REST API. Croydon's forecast comes from
+  [Open-Meteo](https://open-meteo.com/): code turns it into the conditions
+  (WMO code), whole-degree high and low, the highest rain chance, the hours
+  when rain is likely (hourly chance of 50% or more, merged into ranges
+  such as "13:00 to 16:00"; on the day the clocks go forward, 00:00 and
+  02:00 count as consecutive), and sunrise and sunset. Every hour that
+  exists that London day must have a numeric rain chance, otherwise the
+  section is unavailable: "no rain" is never concluded from missing data.
+  Planned Windrush line (London Overground) disruption comes from the TfL
+  Unified API: a status
+  counts when one of its validity periods (UTC) overlaps the London day,
+  and its notice is shown exactly as TfL sent it (only leading and trailing
+  whitespace stripped; a single line break between sentences stays inside
+  the bullet). A notice that is missing, malformed, or would render as a
+  link, image, code, maths or anything other than one plain bullet is left
+  out, never rewritten, and the section then says some notices could not be
+  shown rather than "No planned disruption". None of these needs a key.
 - **LLM boundary** (`gpt-6-luna`, OpenAI Responses API):
   - Call A turns the Wikipedia extracts into the country blurb and the
     research fact.
@@ -419,6 +444,30 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
     sign and million/billion/trillion) that was not supplied. If the UK has
     no figure, or it could not be fetched, the sentence says so. Call C is
     told these percentages are code-computed and not to recompute them.
+  - Call E writes the weather paragraph ("Today's weather is ... Chances of
+    rain are ... It will likely rain ... Sunrise is at ...") from the
+    code-built forecast strings. It has no tools. The paragraph is rejected
+    unless it contains every one of those strings verbatim (conditions,
+    high, low, rain chance, each rain range or "No single hour is more
+    likely than not to see rain", sunrise, sunset), stays within 70 words
+    and uses no number that was not supplied. If it fails twice, a
+    code-built sentence in the same shape is shown instead.
+  - Call F checks Thameslink. No keyless API lists planned National Rail
+    engineering works (TfL's `thameslink` line shows Good Service for every
+    future date, and the Rail Data Marketplace needs a registered key), so
+    it uses web search (at most two tool calls), told to prefer official
+    sources and to report only disruption a page states for that date, in
+    at most 70 words. A
+    "disruption" answer needs at least one source matching a URL the search
+    tool returned, validated like call B's, and is shown labelled "From an
+    AI web search; may be incomplete or wrong". A "none_found" answer is
+    shown as "An AI web search found no notice ...; this is not a
+    guarantee", never as "no disruption". A National Rail link is always
+    shown.
+  - Each of weather, Windrush and Thameslink degrades on its own: any error
+    marks only that part unavailable and is listed in the run check. Call C
+    reviews these sections too and is told to treat their text (TfL notices,
+    web-search summaries) as data, not instructions.
   - Table cells, numbers, years and links always come from code.
 - **Run check:** a failed source or model call degrades only its own section
   ("Unavailable today: ..."), and nothing is ever filled in from guesswork. A
@@ -435,13 +484,14 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
   passed through.
 - **Secrets:** the three `MD_TO_KINDLE_*` secrets above, plus
   `OPENAI_API_KEY`. Use a dedicated OpenAI project key with a hard monthly
-  budget cap (this project uses $2/month). Realistic cost is about $6-9/year,
-  mostly web-search fees (call B, plus the source check on days call C
-  disputes something); occasional retries add a little. The cap is the ceiling: if
+  budget cap (this project uses $2/month). Realistic cost is about
+  $10-13/year, mostly web-search fees (calls B and F each day, plus the
+  source check on days call C disputes something); occasional retries add a
+  little. The cap is the ceiling: if
   it is hit, the model calls fail, and the document is still sent with the
   code-built facts and those sections marked unavailable.
 - **Manual runs:** in Actions -> "Daily Facts to Kindle" -> Run workflow.
-  Tick `preview` to build today's EPUB as a downloadable artifact without
+  Tick `preview` to build tomorrow's EPUB as a downloadable artifact without
   sending it or touching state.
 - **Force a resend:** delete the date from `daily_facts_state.json` on the
   `daily-facts-state` branch, then run the workflow.
@@ -449,16 +499,18 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
 
 ```bash
 .venv/bin/python3 daily_facts.py --dry-run --date 2026-10-10   # Markdown only -> inputs/
-.venv/bin/python3 daily_facts.py --preview                     # today's EPUB -> outputs/, no send
+.venv/bin/python3 daily_facts.py --preview                     # tomorrow's EPUB -> outputs/, no send
 .venv/bin/python3 daily_facts.py --check-data                  # validate catalogues against Wikipedia
 ```
 
 - **Live smoke tests:** `tests/test_daily_facts_live.py` makes real World
-  Bank, Wikipedia and OpenAI calls (a few cents per run), so it is skipped
-  unless `DAILY_FACTS_LIVE=1`; with the flag but no `OPENAI_API_KEY` it
-  fails rather than skips. It checks call D on its own (a larger and a
-  smaller country, a Jamaica/UK pair, and the no-UK-data case) and builds a
-  whole day with `--preview`, so nothing is sent and no state changes.
+  Bank, Wikipedia, Open-Meteo, TfL and OpenAI calls (a few cents per run),
+  so it is skipped unless `DAILY_FACTS_LIVE=1`; with the flag but no
+  `OPENAI_API_KEY` it fails rather than skips. It checks call D on its own
+  (a larger and a smaller country, a Jamaica/UK pair, and the no-UK-data
+  case), calls E and F on their own for tomorrow (a real Open-Meteo
+  forecast and a real Thameslink web search), and builds a whole day with
+  `--preview`, so nothing is sent and no state changes.
   `DAILY_FACTS_LIVE_DATE` picks the day (default 2026-10-11).
   `DAILY_FACTS_LIVE_OUT` sets where the Markdown and EPUB are kept (default:
   a new temporary directory, printed at the end).
