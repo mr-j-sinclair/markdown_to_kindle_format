@@ -47,9 +47,9 @@ The Daily Facts automation (`daily_facts.py`, `.github/workflows/daily_facts.yml
 - Other cases require explicit user direction unless another instruction covers them.
 - Produce a converted summary document (`inputs/` → `outputs/`, referenced in the reply) only for changes to source `.py` files, dependencies, or the runtime/virtual environment; for anything else a chat reply is sufficient.
 
-## Copyright-limited content (any source)
+## Full text by default (personal reading)
 
-- If full text can't be reproduced for copyright reasons and is summarized or truncated, the first content immediately after the document's `# Title` must be a bold notice saying so, immediately followed by a verified, working, clickable link to the original source.
-- Suffix both file names with `_summary` (`article_summary.md`, `article_summary.epub`).
+- Every deliverable goes only to the user's own personal Kindle for private, non-commercial reading, so reproduce the full text of any source the user supplies (web page, article, PDF, email, post). Do not shorten or summarise it on copyright grounds, and never pass `--no-send-to-kindle` for that reason.
+- Summarise or truncate only when the full text genuinely can't be obtained (paywall, login wall, fetch failure) or the user asks for a summary. Then the first content immediately after the document's `# Title` must be a bold notice saying why, immediately followed by a verified, working, clickable link to the original source, and both file names get a `_summary` suffix (`article_summary.md`, `article_summary.epub`).
 
 Keep this file at or below 150 lines; when adding a rule, merge or remove equivalent prose or move task-specific procedures to on-demand guidance.

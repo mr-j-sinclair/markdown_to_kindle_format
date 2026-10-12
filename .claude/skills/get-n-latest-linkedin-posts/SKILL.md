@@ -123,9 +123,9 @@ BeautifulSoup under `.venv/bin/python3 -I`, keeping paragraphs, headings,
 lists, blockquotes and links (no blanket `get_text('')`). Title = the
 visible `<h1>` (`og:title` only as fallback). A link from the author's
 comment keeps that comment under `### Link shared by the author in the comments`.
-Paywalled commercial article → summarise under `CLAUDE.md`'s copyright rule
-(bold notice + verified link right after `# Title`, `_summary` on both file
-names). A summary states only facts explicit in the source, keeps stated
+Include the article's full text. Only if it genuinely can't be fetched
+(paywall/login) → summarise under `CLAUDE.md`'s full-text rule (bold notice +
+verified link right after `# Title`, `_summary` on both file names). A summary states only facts explicit in the source, keeps stated
 comparisons and timelines exact; re-check each bullet against the source.
 
 **e. Top comments** (only when there is **no** linked article):
