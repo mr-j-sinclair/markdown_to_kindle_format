@@ -113,6 +113,39 @@
         "Jamaica 'Central government debt (% of GDP)' latest World Bank value is from 2020.",
         "UK 'Central government debt (% of GDP)' (Jamaica comparison) latest World Bank value is from 2020."
       ]
+    },
+    "2026-10-14": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Explains retrieval as a way to add relevant knowledge to a prompt, and notes that adding more chunks can become distracting.",
+          "url": "https://www.anthropic.com/engineering/contextual-retrieval"
+        }
+      ],
+      "ai_theme": "Context engineering",
+      "ai_topic": "Just-in-Time Context Loading",
+      "at": "2026-10-12T23:17:07+00:00",
+      "country": "PRK",
+      "indicators": {
+        "JM": "NV.IND.TOTL.ZS",
+        "UK": "NV.IND.TOTL.ZS"
+      },
+      "research_title": "Kula ring",
+      "reviewer_disagreements": [
+        {
+          "note": "Calling Malinowski’s study a “debate with” Mauss may overstate their relationship; Mauss discussed the Kula in The Gift, rather than engaging in a direct debate with Malinowski.",
+          "section": "research",
+          "url": "https://www.anthroencyclopedia.com/entry/gifts"
+        }
+      ],
+      "thameslink_search_actions": {
+        "open_page": 2,
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
