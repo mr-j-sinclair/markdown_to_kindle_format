@@ -44,6 +44,36 @@
       "research_title": "Mitochondria",
       "reviewer_disagreements": [],
       "warnings": []
+    },
+    "2026-10-12": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines the harness as the runtime mediating context, tools, state, feedback and verification, and argues capability emerges from the model–harness–environment system.",
+          "url": "https://arxiv.org/abs/2605.13357"
+        },
+        {
+          "model_attribution": "Describes harness engineering as designing and evolving the agent runtime, including its loop, tools, context management, safety controls and orchestration.",
+          "url": "https://arxiv.org/abs/2609.00006"
+        }
+      ],
+      "ai_theme": "Emerging practices",
+      "ai_topic": "Harness Engineering",
+      "at": "2026-10-12T04:45:28+00:00",
+      "country": "DOM",
+      "indicators": {
+        "JM": "NV.SRV.TOTL.ZS",
+        "UK": "BX.KLT.DINV.WD.GD.ZS"
+      },
+      "research_title": "Keynesian economics",
+      "reviewer_disagreements": [],
+      "warnings": [
+        "Jamaica’s exports-of-goods-and-services indicator was unavailable; the section reports services value added instead.",
+        "Jamaica: no World Bank value for 'Exports of goods and services (% of GDP)'; tried the next indicator."
+      ]
     }
   }
 }
