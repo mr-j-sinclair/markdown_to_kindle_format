@@ -74,6 +74,45 @@
         "Jamaica’s exports-of-goods-and-services indicator was unavailable; the section reports services value added instead.",
         "Jamaica: no World Bank value for 'Exports of goods and services (% of GDP)'; tried the next indicator."
       ]
+    },
+    "2026-10-13": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Describes the harness/control-plane and sandbox/execution-plane split, plus saved state, snapshots and resuming a workspace.",
+          "url": "https://developers.openai.com/api/docs/guides/agents/sandboxes"
+        },
+        {
+          "model_attribution": "Explains starting and reconnecting environments, managing shutdown, and notes that a mid-turn disconnect does not automatically restart a killed command.",
+          "url": "https://developers.openai.com/api/docs/guides/agents-api/environments/lifecycle"
+        },
+        {
+          "model_attribution": "Defines the harness, environment and application server as separate components, and explains that self-hosted environment lifecycle is application-managed.",
+          "url": "https://developers.openai.com/api/docs/guides/agents-api/architecture"
+        }
+      ],
+      "ai_theme": "Harness engineering",
+      "ai_topic": "Resumable Sandbox Handoffs",
+      "at": "2026-10-12T13:35:37+00:00",
+      "country": "GEO",
+      "indicators": {
+        "JM": "GC.DOD.TOTL.GD.ZS",
+        "UK": "NY.GDP.MKTP.CD"
+      },
+      "research_title": "Lagrange point",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Jamaica economy data is from 2020; the UK comparison is also from 2020, so both figures are six years old.",
+        "Jamaica 'Central government debt (% of GDP)' latest World Bank value is from 2020.",
+        "UK 'Central government debt (% of GDP)' (Jamaica comparison) latest World Bank value is from 2020."
+      ]
     }
   }
 }
