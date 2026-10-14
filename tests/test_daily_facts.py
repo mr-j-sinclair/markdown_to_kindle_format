@@ -38,17 +38,30 @@ def wiki(title, extract="Some encyclopedic text."):
                        "content_urls": {"desktop": {"page": f"https://en.wikipedia.org/wiki/{title}"}}}).encode()
 
 
-def forecast(url, chances=None, **daily):
-    """An Open-Meteo answer for the URL's date: light rain, 20.0/13.4 °C and
-    rain likely 13:00-16:00 unless overridden."""
+def forecast(url, chances=None, amounts=None, codes=None, offset=3600, **daily):
+    """An Open-Meteo answer for the URL's date and the next, shaped like the
+    real one: 48 hourly labels at ONE fixed offset (utc_offset_seconds), and
+    each label's values covering the PRECEDING hour. chances/amounts/codes are
+    per hour of the date (index 13 = 13:00-14:00 when offset matches London),
+    so they sit on labels 1..24. Defaults: light rain, 20.0/13.4 °C and light
+    showers 13:00-16:00."""
     day = re.search(r"start_date=([\d-]+)", url).group(1)
-    chances = chances or [0] * 13 + [55, 64, 50, 40] + [0] * 7
-    values = {"time": [day], "weather_code": [61], "temperature_2m_max": [20.0], "temperature_2m_min": [13.4],
-              "precipitation_probability_max": [max(chances)], "sunrise": [f"{day}T07:20"],
-              "sunset": [f"{day}T18:11"]}
-    values.update({k: [v] for k, v in daily.items()})
-    return json.dumps({"daily": values, "hourly": {"time": [f"{day}T{h:02d}:00" for h in range(len(chances))],
-                                                   "precipitation_probability": chances}}).encode()
+    next_day = re.search(r"end_date=([\d-]+)", url).group(1)
+    chances = [0] * 13 + [55, 64, 50, 40] + [0] * 7 if chances is None else chances
+    amounts = [0.0] * 13 + [0.2, 0.3, 0.1] + [0.0] * 8 if amounts is None else amounts
+    codes = [3] * 13 + [80, 80, 80] + [3] * 8 if codes is None else codes
+
+    def labels(values, before):
+        return [before] + list(values) + [before] * (47 - len(values))
+    values = {"time": [day, next_day], "weather_code": [61, 3], "temperature_2m_max": [20.0, 18.0],
+              "temperature_2m_min": [13.4, 11.0], "precipitation_probability_max": [max(chances or [0]), 0],
+              "sunrise": [f"{day}T07:20", f"{next_day}T07:22"], "sunset": [f"{day}T18:11", f"{next_day}T18:09"]}
+    values.update({k: [v, values[k][1]] for k, v in daily.items()})
+    times = [f"{d}T{h:02d}:00" for d in (day, next_day) for h in range(24)]
+    return json.dumps({"utc_offset_seconds": offset, "daily": values,
+                       "hourly": {"time": times, "precipitation_probability": labels(chances, 0),
+                                  "precipitation": labels(amounts, 0.0),
+                                  "weather_code": labels(codes, 3)}}).encode()
 
 
 def tfl_status(*statuses):
@@ -79,6 +92,39 @@ class FakeHTTP:
         raise AssertionError(f"unexpected URL {url}")
 
 
+# Trimmed live responses (2026-10-14). The IMF DataMapper returns every
+# country whatever the path, with projections years ahead; WHO's GHO rows
+# carry a sex dimension the request must pin.
+IMF_VALUES = {"GBR": {"2023": 98.3, "2024": 99.4, "2025": 102.1, "2026": 102, "2027": 102.5},
+              "JAM": {"2023": 66.5, "2024": 62.5, "2025": 66, "2026": 64.3, "2027": 64},
+              "SDN": {"2023": 286.9, "2024": 282.3, "2025": 204.4, "2026": 334.4, "2027": 274.1}}
+WHO_ROWS = [{"SpatialDim": iso3, "TimeDim": year, "Dim1": sex, "Dim2": None, "NumericValue": value}
+            for iso3, year, sex, value in (
+                ("GBR", 2022, "SEX_BTSX", 79.4), ("GBR", 2022, "SEX_FMLE", 80.9), ("GBR", 2022, "SEX_MLE", 77.8),
+                ("GBR", 2023, "SEX_BTSX", 80.7), ("GBR", 2023, "SEX_FMLE", 82.6), ("GBR", 2023, "SEX_MLE", 78.9),
+                ("JAM", 2022, "SEX_BTSX", 72.1), ("JAM", 2022, "SEX_FMLE", 74.9), ("JAM", 2022, "SEX_MLE", 69.5),
+                ("JAM", 2023, "SEX_BTSX", 72.6), ("JAM", 2023, "SEX_FMLE", 75.1), ("JAM", 2023, "SEX_MLE", 70.2))]
+
+
+def imf_page(url, values=None):
+    code = re.search(r"api/v1/([^/]+)/", url).group(1)
+    return json.dumps({"values": {code: IMF_VALUES if values is None else values},
+                       "api": {"version": "1", "output-method": "json"}}).encode()
+
+
+def who_page(url, rows=None):
+    """Applies the request's pinned Dim1, as the real filter does."""
+    rows = WHO_ROWS if rows is None else rows
+    sex = re.search(r"Dim1%20eq%20'(\w+)'", url)
+    return json.dumps({"value": [r for r in rows if not sex or r["Dim1"] == sex.group(1)]}).encode()
+
+
+def fact_series(url):
+    """World Bank rows for today's fact, both countries in 2024 (UK 2025 too)."""
+    code = re.search(r"indicator/([^?]+)", url).group(1)
+    return wb_page([wb_row("GBR", 2025, 3.1, code), wb_row("GBR", 2024, 2.9, code), wb_row("JAM", 2024, 4.2, code)])
+
+
 def default_routes(country_iso3="JAM"):
     def population(url):
         rows = [wb_row(country_iso3, 2024, 2_800_000), wb_row("GBR", 2024, 69_000_000)]
@@ -89,20 +135,12 @@ def default_routes(country_iso3="JAM"):
     def land(url):
         return wb_page([wb_row(country_iso3, 2024, 10_830, df.LAND_AREA), wb_row("GBR", 2024, 241_930, df.LAND_AREA)])
 
-    def latest(url):
-        iso3 = re.search(r"country/([A-Z]{3})/", url).group(1)
-        code = re.search(r"indicator/([^?]+)", url).group(1)
-        return wb_page([wb_row(iso3, 2025, 4.2, code)])
-
-    def uk_series(url):  # the UK's value of Jamaica's indicator
-        code = re.search(r"indicator/([^?]+)", url).group(1)
-        return wb_page([wb_row("GBR", 2025, 3.1, code), wb_row("GBR", 2024, 2.9, code)])
-
     return {
         "SP.POP.TOTL?format=json&per_page=200&date=": population,
         "AG.LND.TOTL.K2?format=json&per_page=200&date=": land,
-        "mrnev=1": latest,
-        "country/GBR/indicator/": uk_series,
+        "country/GBR;JAM/indicator/": fact_series,
+        "imf.org/external/datamapper/api": imf_page,
+        "ghoapi.azureedge.net": who_page,
         "flagcdn.com": PNG,
         "api.open-meteo.com": forecast,
         "api.tfl.gov.uk": tfl_status(),
@@ -113,7 +151,7 @@ def default_routes(country_iso3="JAM"):
 
 def world_bank_down_routes():
     routes = default_routes()
-    for key in [k for k in routes if "date=" in k or "mrnev" in k or "/indicator/" in k]:
+    for key in [k for k in routes if "date=" in k or "/indicator/" in k]:
         del routes[key]
     routes["worldbank"] = TimeoutError()
     return routes
@@ -146,14 +184,24 @@ GOOD_B = {"topic_title": "Context rot", "concept": "Long contexts degrade recall
           "why_it_matters": ["It limits agent reliability."],
           "sources": [{"url": "https://example.com/Guide/Evals", "supports": "Recall degrades with length."}]}
 GOOD_C = {"status": "ok", "notes": [], "source_disagreements": []}
-GOOD_E = {"paragraph": "Today's weather is light rain, with a high of 20°C and a low of 13°C. Chances of rain "
-                       "are up to 64%. It will likely rain from 13:00 to 16:00. Sunrise is at 07:20 and sunset "
-                       "at 18:11."}
+GOOD_E = {"paragraph": "A grey day with light showers from 1pm until 4pm, so take an umbrella for the "
+                       "afternoon. Expect a high of 20°C and a low of 13°C."}
 RAIL_URL = "https://www.thameslinkrailway.com/travel-information/engineering-works"
 GOOD_F = {"status": "none_found", "summary": "", "sources": []}
 DISRUPTION_F = {"status": "disruption",
                 "summary": "No Thameslink trains run between Blackfriars and Elephant & Castle all day.",
                 "sources": [{"url": RAIL_URL, "supports": "Lists the closure on 10 October."}]}
+
+
+def echo_fact(request):
+    """Fact writer stand-in: repeats the block's relation and any differing years."""
+    relation = re.search(r"^RELATION: (.+)$", request["input"], re.MULTILINE)
+    years = re.search(r"different years \(Jamaica (\d{4}), UK (\d{4})\)", request["input"])
+    text = (f"Jamaica's figure is {relation.group(1)}." if relation
+            else "Only one country's figure is available today, so there is no comparison.")
+    if years:
+        text += f" Jamaica's is from {years.group(1)} and the UK's from {years.group(2)}."
+    return response({"paragraph": text}, tool_calls=[])
 
 
 def echo_comparison(request):
@@ -162,6 +210,22 @@ def echo_comparison(request):
     sentence = (f"It is {relation.group(1)}." if relation
                 else "No UK figure is available, so no comparison is possible.")
     return response({"sentence": sentence}, tool_calls=[])
+WB_PAGE = "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=JM&view=chart"
+PRISON_UK = "https://www.prisonstudies.org/country/united-kingdom-england-wales"
+PRISON_JM = "https://www.prisonstudies.org/country/jamaica"
+
+
+def found(country, value, year, url, **extra):
+    return dict({"country": country, "status": "found", "value": value, "year": year,
+                 "unit_note": "Prisoners per 100,000 of the national population.", "url": url,
+                 "supports": "The page lists the prison population rate."}, **extra)
+
+
+def fact_search(*items, urls=(PRISON_UK, PRISON_JM)):
+    """A call G answer whose search returned urls."""
+    return response({"countries": list(items)}, tool_calls=[search_call(*urls)])
+
+
 REVIEWER_URL = "https://history.example/Golay-1949"   # a page the source check's search returned
 
 
@@ -201,6 +265,9 @@ def good_client():
                        "run_check": [response(GOOD_C, tool_calls=[])],
                        "comparison": [echo_comparison],
                        "weather": [response(GOOD_E, tool_calls=[])],
+                       "country_fact": [echo_fact],
+                       # Call G only runs when an API lacks a figure; by default it finds nothing.
+                       "country_fact_search": [response({"countries": []}, tool_calls=[search_call(WB_PAGE)])],
                        "thameslink": [response(GOOD_F, tool_calls=[search_call(RAIL_URL)])]})
 
 
@@ -217,10 +284,14 @@ class Base(unittest.TestCase):
         self.addCleanup(p.stop)
         self.addCleanup(shutil.rmtree, self.tmp)
 
-    def jamaica_selection(self):
+    def jamaica_selection(self, fact="internet"):
         sel = df.select(DATE, self.data)
         sel.country = next(c for c in self.data["countries"] if c["cca3"] == "JAM")
+        sel.country_fact = self.fact(fact)
         return sel
+
+    def fact(self, fact_id):
+        return next(f for f in self.data["country_facts"] if f["id"] == fact_id)
 
     def gather(self, routes=None, client=None, sel=None):
         sel = sel or self.jamaica_selection()
@@ -233,8 +304,8 @@ class Base(unittest.TestCase):
 class SelectionTests(Base):
     def test_same_date_same_picks(self):
         a, b = df.select(DATE, self.data), df.select(DATE, self.data)
-        self.assertEqual((a.country, a.research, a.ai_theme, a.uk_indicators, a.jm_indicators),
-                         (b.country, b.research, b.ai_theme, b.uk_indicators, b.jm_indicators))
+        self.assertEqual((a.country, a.research, a.ai_theme, a.country_fact),
+                         (b.country, b.research, b.ai_theme, b.country_fact))
 
     def test_no_repeats_within_a_cycle(self):
         n = len(self.data["countries"])
@@ -263,11 +334,13 @@ class SelectionTests(Base):
             for d in range(gap, len(picks)):
                 self.assertNotIn(picks[d], picks[d - gap:d], f"n={n} day={d}")
 
-    def test_indicator_fallbacks_are_distinct_next_slots(self):
-        sel = df.select(DATE, self.data)
-        codes = [i["code"] for i in sel.uk_indicators]
-        self.assertEqual(len(codes), df.INDICATOR_TRIES)
-        self.assertEqual(len(set(codes)), len(codes))
+    def test_one_fact_a_day_rotates_through_the_catalogue(self):
+        facts = self.data["country_facts"]
+        day = (DATE - df.EPOCH).days
+        self.assertEqual(df.select(DATE, self.data).country_fact,
+                         facts[df.seeded_index(len(facts), "country-fact", day)])   # one fact for both countries
+        cycle = [df.seeded_index(len(facts), "country-fact", d) for d in range(len(facts))]
+        self.assertEqual(sorted(cycle), list(range(len(facts))))                    # each used once per cycle
 
     def test_catalogues_are_well_formed(self):
         titles = [t["wikipedia_title"] for t in self.data["research"]]
@@ -277,8 +350,20 @@ class SelectionTests(Base):
         for theme in self.data["ai_themes"]:
             self.assertTrue(theme["name"] and theme["description"] and theme["examples"])
         self.assertEqual(len(self.data["countries"]), 193)
-        for ind in self.data["indicators"]:
-            self.assertIn(ind["format"], ("usd", "pct", "count"))
+        ids = [f["id"] for f in self.data["country_facts"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertGreaterEqual(len(ids), 15)
+        for f in self.data["country_facts"]:
+            self.assertIn(f["format"], ("usd", "pct", "count", "dec", "year"), f["id"])
+            self.assertTrue(f["label"] and f["meaning"] and f["org"], f["id"])
+            self.assertIn(f["source"], ("worldbank", "imf", "who", "search"), f["id"])
+            if f["source"] == "search":
+                self.assertTrue(f["domains"], f["id"])
+            else:
+                self.assertTrue(f["code"], f["id"])
+            if f["source"] == "who":
+                self.assertTrue(f["page"].startswith("https://www.who.int/"), f["id"])
+        self.assertEqual({f["source"] for f in self.data["country_facts"]}, {"worldbank", "imf", "who", "search"})
 
 
 # ---------- World Bank ----------
@@ -289,49 +374,30 @@ class WorldBankTests(Base):
         self.assertEqual(facts.population, {"value": 2_800_000, "uk_value": 69_000_000, "year": 2024})
         self.assertTrue(any("uses 2024" in d for d in facts.diagnostics))
 
-    def test_latest_value_and_year(self):
-        with patch.object(df, "http_get", FakeHTTP(default_routes())):
-            self.assertEqual(df.world_bank_latest("GBR", "FP.CPI.TOTL.ZG"), (4.2, 2025))
-
-    def test_empty_value_falls_back_to_next_indicator(self):
-        sel = self.jamaica_selection()
-        first, second = sel.jm_indicators[0]["code"], sel.jm_indicators[1]["code"]
-        routes = default_routes()
-        base = routes["mrnev=1"]
-        routes["mrnev=1"] = lambda url: (wb_page([wb_row("JAM", 2025, None, first)])
-                                         if f"JAM/indicator/{first}" in url else base(url))
-        _, facts = self.gather(routes, sel=sel)
-        self.assertEqual(facts.jm_econ["indicator"]["code"], second)
-        self.assertTrue(any("tried the next indicator" in d for d in facts.diagnostics))
-
     def test_stale_observation_is_flagged(self):
         routes = default_routes()
-        routes["mrnev=1"] = lambda url: wb_page([wb_row(re.search(r"country/([A-Z]{3})/", url).group(1),
-                                                        2020, 97.9)])
+        routes["country/GBR;JAM/indicator/"] = wb_page([wb_row("GBR", 2021, 97.9), wb_row("JAM", 2021, 90.0)])
         _, facts = self.gather(routes)
-        self.assertEqual(facts.jm_econ["year"], 2020)
-        self.assertTrue(any("from 2020" in d for d in facts.diagnostics))
+        self.assertEqual(facts.country_fact["observations"]["JAM"]["year"], 2021)
+        self.assertTrue(any("is from 2021" in d for d in facts.diagnostics))
 
     def test_malformed_response_raises_fetch_error(self):
         with patch.object(df, "http_get", FakeHTTP({"worldbank": b'[{"message": "bad"}]'})):
             with self.assertRaises(df.FetchError):
-                df.world_bank_latest("GBR", "X")
+                df.world_bank_series(["GBR"], "X", 2020, 2026)
 
     def test_malformed_rows_become_fetch_errors_and_degrade(self):
         for bad in ({"value": "not-a-number"}, {"date": "20x5"}, {"value": float("nan")}):
             routes = default_routes()
-            routes["mrnev=1"] = wb_page([dict(wb_row("JAM", 2025, 1.0, "X"), **bad)])
-            with patch.object(df, "http_get", FakeHTTP(routes)):
-                with self.assertRaises(df.FetchError, msg=bad):
-                    df.world_bank_latest("JAM", "X")
             routes["SP.POP.TOTL?format=json&per_page=200&date="] = wb_page(
                 [dict(wb_row("JAM", 2024, 1.0), **bad), wb_row("GBR", 2024, 69_000_000)])
+            with patch.object(df, "http_get", FakeHTTP(routes)):
+                with self.assertRaises(df.FetchError, msg=bad):
+                    df.world_bank_series(["JAM", "GBR"], df.POPULATION, 2020, 2026)
             sel, facts = self.gather(routes)
             self.assertIsNone(facts.population)
-            self.assertIsNone(facts.uk_econ)
-            self.assertIsNone(facts.jm_econ)
             self.assertTrue(any(d.startswith("Population unavailable") for d in facts.diagnostics))
-            self.assertIn("Unavailable today: uk economy fact", df.render_body(sel, facts))
+            self.assertIn("| Population | unavailable today |", df.render_body(sel, facts))
 
     def test_non_positive_population_is_no_data_and_stale_year_flagged(self):
         routes = default_routes()
@@ -380,7 +446,7 @@ class WorldBankTests(Base):
                 raise TimeoutError()
             return wb_page([wb_row("GBR", 2025, 1.0)])
         with patch.object(df, "http_get", flaky):
-            self.assertEqual(df.world_bank_latest("GBR", "X"), (1.0, 2025))
+            self.assertEqual(df.world_bank_series(["GBR"], "X", 2020, 2026), {"GBR": {2025: 1.0}})
         self.assertEqual(len(calls), 3)
 
 
@@ -399,28 +465,35 @@ class RenderTests(Base):
         self.assertEqual(df.format_value(8003.4, "usd"), "$8,003")
         self.assertEqual(df.format_value(-1.234, "pct"), "-1.2%")
         self.assertEqual(df.format_value(2_837_077, "count"), "2.84 million")
+        self.assertEqual(df.format_value(286.37, "dec"), "286.4")
 
     def test_full_document(self):
         sel, facts = self.gather()
         markdown, warnings, _ = df.build_document(sel, facts, client=good_client())
         self.assertTrue(markdown.startswith("# Daily Facts — Saturday 10 October 2026\n"))
         for heading in ("## Flag of the Day: Jamaica", "## Research Fact: A striking fact",
-                        "## AI Engineering: Context rot", "## UK Economy", "## Jamaica Economy"):
+                        "## AI Engineering: Context rot", "## UK vs Jamaica",
+                        "### People using the internet (% of population)"):
             self.assertIn(heading, markdown)
         self.assertIn("![Flag of Jamaica](daily_facts_2026-10-10_flag.png)", markdown)
         self.assertIn("| Capital | Kingston |", markdown)
         self.assertIn("| Currency | Jamaican dollar |", markdown)
         self.assertIn("| Population | 2.8 million (2024) |", markdown)
         self.assertIn("| vs UK | 4.1% of the UK's (2024) |", markdown)
-        # Every table row has exactly two cells.
-        for line in markdown.splitlines():
+        # Every flag table row has exactly two cells.
+        for line in markdown.split("## Flag of the Day", 1)[1].split("\n## ", 1)[0].splitlines():
             if line.startswith("|"):
                 self.assertEqual(line.count("|"), 3, line)
-        # Every economy fact carries its year and a World Bank source.
-        for section in ("## UK Economy", "## Jamaica Economy"):
-            part = markdown.split(section, 1)[1]
-            self.assertRegex(part, r"in 2025\.")
-            self.assertIn("https://data.worldbank.org/indicator/", part)
+        # The fact: one code-formatted row for both countries (the latest year both have), each
+        # country's World Bank link, and no web-search notice.
+        fact = markdown.split("## UK vs Jamaica", 1)[1]
+        self.assertIn("| | UK | Jamaica |\n|---|---|---|\n"
+                      "| People using the internet (% of population) | 2.9% (2024) | 4.2% (2024) |", fact)
+        self.assertIn("Jamaica's figure is 1.3 percentage points higher than the UK's.", fact)
+        self.assertIn("Sources: [World Bank — IT.NET.USER.ZS (UK)](https://data.worldbank.org/indicator/"
+                      "IT.NET.USER.ZS?locations=GB) · [World Bank — IT.NET.USER.ZS (Jamaica)]("
+                      "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=JM)", fact)
+        self.assertNotIn("web search", fact)
         # The AI source is rendered from the tool's own metadata URL.
         self.assertIn(f"- [example.com/Guide/Evals]({TOOL_URL})", markdown)
 
@@ -433,14 +506,15 @@ class RenderTests(Base):
         self.assertIn("daily_facts_2026-10-10_flag.png", links)
         self.assertIn(TOOL_URL, links)
 
-    def test_dollar_economy_values_pass_invariant(self):
+    def test_dollar_values_pass_invariant(self):
         sel, facts = self.gather()
-        for econ, value in ((facts.uk_econ, 3.1e12), (facts.jm_econ, 22_704_903_217)):
-            econ["indicator"] = dict(econ["indicator"], format="usd", label="GDP (current US$)")
-            econ["value"] = value
+        sel.country_fact = dict(sel.country_fact, format="usd", label="GDP (current US$)")
+        for iso3, value in (("GBR", 3.1e12), ("JAM", 22_704_903_217)):
+            facts.country_fact["observations"][iso3]["value"] = value
+        facts.fact_text = None
         markdown, _, _ = df.build_document(sel, facts, client=good_client())
-        self.assertIn("$3.1 trillion", markdown)
-        self.assertIn("$22.7 billion", markdown)
+        self.assertIn("| $3.1 trillion (2024) | $22.7 billion (2024) |", markdown)
+        self.assertIn("Jamaica's figure is 0.73% of the UK's.", markdown)   # the code-built paragraph
 
     def test_wikipedia_url_with_parentheses_passes_invariant(self):
         url = "https://en.wikipedia.org/wiki/Georgia_(country)"
@@ -552,15 +626,17 @@ class DegradationTests(Base):
         self.assertIn("| Population | unavailable today |", markdown)
         self.assertIn("| Land area | unavailable today |", markdown)
         self.assertNotIn("Size vs UK", markdown)
-        self.assertIn("Unavailable today: uk economy fact", markdown)
-        self.assertIn("Unavailable today: jamaica economy fact", markdown)
         self.assertIn("> - Population unavailable (World Bank SP.POP.TOTL: TimeoutError).", markdown)
-        # No fabricated numbers anywhere in the economy sections.
-        self.assertNotRegex(markdown.split("## UK Economy", 1)[1], r"\d+\.\d%")
+        self.assertIn("> - UK vs Jamaica: World Bank API unavailable (World Bank IT.NET.USER.ZS: TimeoutError); "
+                      "tried a web search instead.", markdown)
+        # The default fake search finds nothing on worldbank.org, so the fact is unavailable, not invented.
+        self.assertIn("Unavailable today: the UK vs Jamaica fact", markdown)
+        self.assertNotRegex(markdown.split("## UK vs Jamaica", 1)[1], r"\d+\.\d%")
 
     def test_openai_down_keeps_code_facts_and_shows_raw_diagnostics(self):
         down = FakeClient({name: [RuntimeError("down")] for name in ("grounded_prose", "ai_lesson", "run_check",
-                                                                  "comparison")})
+                                                                  "comparison", "weather", "thameslink",
+                                                                  "country_fact")})
         sel, facts = self.gather(client=down)
         markdown, warnings, _ = df.build_document(sel, facts, client=down)
         self.assertIn("Run check unavailable; raw diagnostics below.", markdown)
@@ -568,7 +644,9 @@ class DegradationTests(Base):
         self.assertIn("Unavailable today: the research fact", markdown)
         self.assertIn("Unavailable today: the AI Engineering topic", markdown)
         self.assertIn("| Capital | Kingston |", markdown)
-        self.assertIn("**", markdown.split("## UK Economy", 1)[1])
+        fact = markdown.split("## UK vs Jamaica", 1)[1]
+        self.assertIn("| 2.9% (2024) | 4.2% (2024) |", fact)       # code figures survive the outage
+        self.assertIn("Jamaica's figure is 1.3 percentage points higher than the UK's.", fact)  # code sentence
         self.assertNotIn("Sources: [Wikipedia]", markdown)
 
 
@@ -829,10 +907,10 @@ class DisagreementTests(Base):
         sel, facts = self.gather()
         facts.diagnostics.clear()
         markdown, warnings, _ = df.build_document(
-            sel, facts, client=self.review_client(("research", HAMMING), ("uk_economy", "Looks low.")))
+            sel, facts, client=self.review_client(("research", HAMMING), ("uk_vs_jamaica", "Looks low.")))
         lines = markdown.splitlines()
         self.assertEqual(lines[4], "> **Run check — warning:** AI reviewer disagrees with a sourced claim in: "
-                                   "Research Fact, UK Economy.")
+                                   "Research Fact, UK vs Jamaica.")
         self.assertEqual(warnings, [])
 
     def test_pointer_follows_notes_and_diagnostics(self):
@@ -857,7 +935,7 @@ class DisagreementTests(Base):
 
     def test_duplicates_dropped_and_capped(self):
         client = self.review_client(("research", HAMMING), ("research", HAMMING), ("flag", "a."),
-                                    ("ai", "b."), ("uk_economy", "c."))
+                                    ("ai", "b."), ("uk_vs_jamaica", "c."))
         review = df.review_document("# doc", [], client=client)
         self.assertEqual([d["section"] for d in review["source_disagreements"]], ["research", "flag", "ai"])
 
@@ -1120,81 +1198,25 @@ class ComparisonTests(Base):
     def comparison_requests(self, client):
         return [r for r in client.requests if r["text"]["format"]["name"] == "comparison"]
 
-    def test_both_comparisons_rendered(self):
+    def test_land_comparison_rendered(self):
         client = good_client()
         sel, facts = self.gather(client=client)
         markdown, _, _ = df.build_document(sel, facts, client=client)
         flag = markdown.split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
         self.assertIn("| Land area | 10,830 km² (2024) |", flag)
         self.assertIn("|\n\n**Size vs UK:** It is 96% smaller than the UK.\n\nAn island", flag)
-        jamaica = markdown.split("## Jamaica Economy", 1)[1]
-        self.assertRegex(jamaica, r"\*\*vs UK:\*\* It is .+\.\n\nSource: ")
-        code = facts.jm_econ["indicator"]["code"]
-        self.assertIn(f"UK figure: [World Bank — {code} (UK)]({df.world_bank_url(code, 'GB')})", jamaica)
-        self.assertEqual(facts.jm_uk, {"value": 3.1, "year": 2025})   # UK value for Jamaica's year
-        self.assertEqual(len(self.comparison_requests(client)), 2)
+        self.assertEqual(len(self.comparison_requests(client)), 1)
 
-    def test_uk_value_for_other_year_is_stated(self):
-        routes = default_routes()
-        routes["country/GBR/indicator/"] = lambda url: wb_page([wb_row("GBR", 2023, 2.0), wb_row("GBR", 2021, 9.0)])
-        client = good_client()
-        sel, facts = self.gather(routes, client=client)
-        self.assertEqual(facts.jm_uk, {"value": 2.0, "year": 2023})   # the UK's latest, not an older year
-        block = self.comparison_requests(client)[-1]["input"]
-        self.assertIn("NOTE: the figures are from different years (Jamaica 2025, UK 2023)", block)
-        self.assertIn("UK: ", block)
-
-    def test_uk_equivalent_no_data(self):
-        routes = default_routes()
-        routes["country/GBR/indicator/"] = lambda url: wb_page([wb_row("GBR", 2025, None)])
-        client = good_client()
-        sel, facts = self.gather(routes, client=client)
-        self.assertEqual(facts.jm_uk, "no_data")
-        self.assertFalse(any("Jamaica comparison" in d for d in facts.diagnostics))
-        block = self.comparison_requests(client)[-1]["input"]
-        self.assertIn("UK: no figure available in World Bank data for 2019-2026", block)
-        self.assertNotIn("RELATION", block)
-        jamaica = df.render_body(sel, facts).split("## Jamaica Economy", 1)[1]
-        self.assertIn("**vs UK:** No UK figure is available", jamaica)
-        self.assertNotIn("(UK)", jamaica)
-        df.check_links(df.render_body(sel, facts), df.allowed_links(sel, facts))
-
-    def test_uk_equivalent_fetch_failed(self):
-        routes = default_routes()
-        routes["country/GBR/indicator/"] = TimeoutError()
-        client = good_client()
-        sel, facts = self.gather(routes, client=client)
-        self.assertEqual(facts.jm_uk, "fetch_failed")
-        self.assertTrue(any(d.startswith("UK figure for the Jamaica comparison unavailable") for d in facts.diagnostics))
-        self.assertIn("UK: the UK figure could not be retrieved today", self.comparison_requests(client)[-1]["input"])
-        self.assertNotIn("(UK)", df.render_body(sel, facts))
-
-    def test_comparisons_degrade_independently(self):
-        for failing, kept in (("COUNTRY:", "**vs UK:**"), ("INDICATOR:", "**Size vs UK:**")):
-            def answer(req, failing=failing):
-                if failing in req["input"]:
-                    raise RuntimeError("down")
-                return echo_comparison(req)
-            client = good_client()
-            client.answers["comparison"] = [answer]
-            sel, facts = self.gather(client=client)
-            markdown, _, _ = df.build_document(sel, facts, client=client)
-            self.assertEqual(markdown.count("*UK comparison unavailable today.*"), 1)
-            self.assertIn(kept, markdown)
-            self.assertTrue(any("(call D) failed twice" in d for d in facts.diagnostics))
-            self.assertEqual(len(self.comparison_requests(client)), 3)  # failing one retried once
-
-    def test_call_d_failure_keeps_section_and_reviewer_notes(self):
-        client = with_disagreements(good_client(), ("jamaica_economy", "Disputed."))
+    def test_land_comparison_failure_keeps_section_and_reviewer_notes(self):
+        client = with_disagreements(good_client(), ("flag", "Disputed."))
         client.answers["comparison"] = [RuntimeError("down")]
         sel, facts = self.gather(client=client)
         markdown, _, disagreements = df.build_document(sel, facts, client=client)
-        self.assertEqual(markdown.count("*UK comparison unavailable today.*"), 2)
-        self.assertNotIn("Unavailable today:", markdown.split("## Flag of the Day", 1)[1])
-        jamaica = markdown.split("## Jamaica Economy", 1)[1]
-        self.assertIn("AI reviewer note", jamaica)     # not suppressed like an unavailable section
-        self.assertIn("UK figure: [World Bank", jamaica)
-        self.assertEqual([d["section"] for d in disagreements], ["jamaica_economy"])
+        flag = markdown.split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("*UK comparison unavailable today.*", flag)
+        self.assertIn("AI reviewer note", flag)     # not suppressed like an unavailable section
+        self.assertTrue(any("Land area comparison (call D) failed twice" in d for d in facts.diagnostics))
+        self.assertEqual([d["section"] for d in disagreements], ["flag"])
 
     def test_links_remain_code_owned(self):
         client = good_client()
@@ -1214,9 +1236,7 @@ class ComparisonTests(Base):
         _, facts = self.gather(default_routes("GBR"), client=client, sel=sel)
         self.assertIsNotNone(facts.land)
         self.assertIsNone(facts.land_comparison)
-        inputs = [r["input"] for r in self.comparison_requests(client)]
-        self.assertEqual(len(inputs), 1)
-        self.assertTrue(inputs[0].startswith("INDICATOR:"))
+        self.assertEqual(self.comparison_requests(client), [])
         flag = df.render_body(sel, facts).split("## Flag of the Day", 1)[1].split("\n## ", 1)[0]
         self.assertIn("| Land area | 241,930 km² (2024) |", flag)
         self.assertNotIn("vs UK:**", flag)
@@ -1230,6 +1250,293 @@ class ComparisonTests(Base):
         _, facts = self.gather(routes)
         self.assertEqual(facts.land, {"value": 10_830, "uk_value": 241_930, "year": 2023})
         self.assertIn("Land area comparison uses 2023, the latest year both countries have.", facts.diagnostics)
+
+
+# ---------- UK vs Jamaica fact (APIs, call G, writer) ----------
+
+class CountryFactTests(Base):
+    def observations(self, fact_id, routes=None, year=2026):
+        with patch.object(df, "http_get", FakeHTTP(routes or default_routes())):
+            return df.api_observations(self.fact(fact_id), year)
+
+    def test_imf_drops_other_countries_and_projections(self):
+        obs = self.observations("gov-debt")
+        url = "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/GBR/JAM"
+        self.assertEqual(obs, {"GBR": {"value": 102.1, "year": 2025, "url": url, "estimate": True, "via": "api"},
+                               "JAM": {"value": 66.0, "year": 2025, "url": url, "estimate": True, "via": "api"}})
+
+    def test_imf_missing_country_and_malformed(self):
+        routes = default_routes()
+        routes["imf.org/external/datamapper/api"] = lambda url: imf_page(url, {"GBR": IMF_VALUES["GBR"]})
+        self.assertEqual(list(self.observations("gov-debt", routes)), ["GBR"])
+        for bad in ({"GBR": {"2025": "102.1"}}, {"GBR": {"20x5": 1.0}}, {"GBR": {"2025": None}}):
+            routes["imf.org/external/datamapper/api"] = lambda url, bad=bad: imf_page(url, bad)
+            with self.assertRaises(df.FetchError, msg=bad):
+                self.observations("gov-debt", routes)
+        routes["imf.org/external/datamapper/api"] = b'{"values": {}}'
+        with self.assertRaises(df.FetchError):
+            self.observations("gov-debt", routes)
+
+    def test_who_pins_dimensions(self):
+        http = FakeHTTP(default_routes())
+        with patch.object(df, "http_get", http):
+            obs = df.api_observations(self.fact("life-expectancy"), 2026)
+        self.assertIn("$filter=(SpatialDim%20eq%20'GBR'%20or%20SpatialDim%20eq%20'JAM')%20and%20Dim1%20eq%20"
+                      "'SEX_BTSX'", http.calls[0])
+        self.assertEqual({k: (v["value"], v["year"]) for k, v in obs.items()},
+                         {"GBR": (80.7, 2023), "JAM": (72.6, 2023)})
+        self.assertEqual(obs["GBR"]["url"], self.fact("life-expectancy")["page"])
+
+    def test_who_ambiguous_rows_and_future_years(self):
+        unpinned = dict(self.fact("life-expectancy"), filter={})
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), self.assertRaises(df.FetchError):
+            df.api_observations(unpinned, 2026)   # three sexes per country and year
+        routes = default_routes()
+        routes["ghoapi.azureedge.net"] = lambda url: who_page(url, WHO_ROWS + [
+            {"SpatialDim": "JAM", "TimeDim": 2030, "Dim1": "SEX_BTSX", "Dim2": None, "NumericValue": 1.0}])
+        self.assertEqual(self.observations("life-expectancy", routes)["JAM"]["year"], 2023)
+
+    def test_years_differ_when_no_common_year(self):
+        routes = default_routes()
+        routes["country/GBR;JAM/indicator/"] = wb_page([wb_row("GBR", 2025, 3.1), wb_row("JAM", 2023, 4.2)])
+        client = good_client()
+        sel, facts = self.gather(routes, client=client)
+        obs = facts.country_fact["observations"]
+        self.assertEqual((obs["GBR"]["year"], obs["JAM"]["year"]), (2025, 2023))
+        block = next(r["input"] for r in client.requests if r["text"]["format"]["name"] == "country_fact")
+        self.assertIn("NOTE: the figures are from different years (Jamaica 2023, UK 2025)", block)
+        self.assertNotIn("country_fact_search", [r["text"]["format"]["name"] for r in client.requests])
+
+    def search_requests(self, client):
+        return [r for r in client.requests if r["text"]["format"]["name"] == "country_fact_search"]
+
+    def test_one_missing_country_is_searched_on_the_source_site(self):
+        routes = default_routes()
+        routes["country/GBR;JAM/indicator/"] = wb_page([wb_row("GBR", 2024, 95.5)])
+        client = good_client()
+        client.answers["country_fact_search"] = [fact_search(found("Jamaica", 90.1, 2024, WB_PAGE), urls=[WB_PAGE])]
+        sel, facts = self.gather(routes, client=client)
+        req = self.search_requests(client)[0]
+        self.assertEqual(req["tools"], [{"type": "web_search", "filters": {"allowed_domains": ["worldbank.org"]}}])
+        self.assertEqual((req["tool_choice"], req["max_tool_calls"], req["timeout"]), ("required", 2, 120))
+        self.assertEqual(req["include"], ["web_search_call.action.sources"])
+        self.assertIn("COUNTRIES: Jamaica\n", req["input"])
+        self.assertEqual(facts.country_fact["searched"], ["JAM"])
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        fact = markdown.split("## UK vs Jamaica", 1)[1]
+        self.assertIn("| 95.5% (2024) | 90.1% (2024) |", fact)
+        self.assertIn("> **Note:** Jamaica's figure was found by an AI (LLM) web search fallback of "
+                      "data.worldbank.org, not from a data API.", fact)
+        self.assertIn(f"[World Bank — IT.NET.USER.ZS (UK)]({df.world_bank_url('IT.NET.USER.ZS', 'GB')}) · "
+                      f"[data.worldbank.org/indicator/IT.NET.USER.ZS (Jamaica)]({WB_PAGE})", fact)
+        self.assertIn(WB_PAGE, df.allowed_links(sel, facts))
+        self.assertTrue(any("no recent World Bank figure for Jamaica" in d for d in facts.diagnostics))
+
+    def test_api_failure_searches_both_and_search_failure_is_unavailable(self):
+        routes = default_routes()
+        routes["imf.org/external/datamapper/api"] = TimeoutError()
+        imf_page_url = "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/GBR"
+        client = good_client()
+        client.answers["country_fact_search"] = [fact_search(found("UK", 101.0, 2025, imf_page_url),
+                                                             found("Jamaica", 66.0, 2025, imf_page_url),
+                                                             urls=[imf_page_url])]
+        sel, facts = self.gather(routes, client=client, sel=self.jamaica_selection("gov-debt"))
+        self.assertIn("COUNTRIES: UK, Jamaica", self.search_requests(client)[0]["input"])
+        section = df.render_sections(sel, facts)["uk_vs_jamaica"]
+        self.assertIn("> **Note:** Both figures were found by an AI (LLM) web search fallback of imf.org", section)
+        self.assertEqual(section.count(imf_page_url), 1)   # one link for both countries' shared page
+        # The search itself failing (here: no search made) leaves the section unavailable, not invented.
+        client = good_client()
+        client.answers["country_fact_search"] = [response({"countries": [found("UK", 101.0, 2025, imf_page_url)]},
+                                                          tool_calls=[])]
+        sel, facts = self.gather(routes, client=client, sel=self.jamaica_selection("gov-debt"))
+        self.assertEqual(len(self.search_requests(client)), 2)   # retried once
+        self.assertIn("Unavailable today: the UK vs Jamaica fact", df.render_sections(sel, facts)["uk_vs_jamaica"])
+        self.assertTrue(any("(call G) failed twice (no web search was made)" in d for d in facts.diagnostics))
+
+    def test_search_only_fact(self):
+        client = good_client()
+        client.answers["country_fact_search"] = [fact_search(found("UK", 133.0, 2025, PRISON_UK),
+                                                             found("Jamaica", 129.0, 2024, PRISON_JM))]
+        sel, facts = self.gather(client=client, sel=self.jamaica_selection("prison-rate"))
+        req = self.search_requests(client)[0]
+        self.assertEqual(req["tools"][0]["filters"], {"allowed_domains": ["prisonstudies.org"]})
+        self.assertIn("UNIT: per 100,000 people", req["input"])
+        block = next(r["input"] for r in client.requests if r["text"]["format"]["name"] == "country_fact")
+        self.assertIn("JAMAICA: 129.0 per 100,000 people (2024) (found by an AI web search of prisonstudies.org; "
+                      "it counts: Prisoners per 100,000 of the national population.)", block)
+        markdown, _, _ = df.build_document(sel, facts, client=client)
+        fact = markdown.split("## UK vs Jamaica", 1)[1]
+        self.assertIn("| Prison population rate (UK: England and Wales) | 133.0 per 100,000 people (2025) | 129.0 per 100,000 people "
+                      "(2024) |", fact)
+        self.assertIn("> **Note:** These figures were found by an AI (LLM) web search of prisonstudies.org; "
+                      "no data API covers this fact.", fact)
+        self.assertIn(f"[prisonstudies.org/country/jamaica (Jamaica)]({PRISON_JM})", fact)
+        df.check_links(markdown, df.allowed_links(sel, facts))
+
+    def test_search_validation_is_per_country(self):
+        cases = (found("Jamaica", 129.0, 2024, "https://www.prisonstudies.org/country/made-up"),   # not a tool URL
+                 found("Jamaica", 129.0, 2024, "https://evil.example/jamaica"),                     # off the domain
+                 found("Jamaica", 129.0, 2024, "https://notprisonstudies.org/jamaica"),            # lookalike host
+                 found("Jamaica", 129.0, 2005, PRISON_JM),                                          # too old
+                 found("Jamaica", 129.0, 2031, PRISON_JM),                                          # future
+                 found("Jamaica", float("nan"), 2024, PRISON_JM),
+                 found("Jamaica", 129.0, 2024, PRISON_JM, unit_note="See https://evil.example"),
+                 dict(found("Jamaica", 0, 0, ""), status="not_found"))
+        for bad in cases:
+            client = FakeClient({"country_fact_search": [fact_search(
+                found("UK", 133.0, 2025, PRISON_UK), bad,
+                urls=(PRISON_UK, PRISON_JM, "https://evil.example/jamaica", "https://notprisonstudies.org/jamaica"))]})
+            if bad["value"] != bad["value"]:   # NaN cannot travel as JSON: check the parser directly
+                with self.assertRaises(ValueError):
+                    df._number(bad["value"])
+                continue
+            result = df.search_country_fact(self.fact("prison-rate"), ["GBR", "JAM"], DATE, client=client)
+            self.assertEqual(list(result["observations"]), ["GBR"], bad)
+            self.assertIn("JAM", result["rejected"], bad)
+            self.assertEqual(result["observations"]["GBR"]["url"], PRISON_UK)
+        sel = self.jamaica_selection("prison-rate")
+        facts = df.Facts(country_fact={"observations": {"GBR": result["observations"]["GBR"]},
+                                       "searched": ["GBR", "JAM"], "search_actions": {}})
+        section = df.render_sections(sel, facts)["uk_vs_jamaica"]
+        self.assertIn("| 133.0 per 100,000 people (2025) | not available today |", section)
+        self.assertIn("> **Note:** UK's figure was found by an AI (LLM) web search of prisonstudies.org", section)
+
+    def test_search_url_rendered_from_tool_metadata(self):
+        client = FakeClient({"country_fact_search": [fact_search(
+            found("Jamaica", 129.0, 2024, "HTTPS://WWW.PRISONSTUDIES.ORG/country/jamaica#rate"))]})
+        result = df.search_country_fact(self.fact("prison-rate"), ["JAM"], DATE, client=client)
+        self.assertEqual(result["observations"]["JAM"]["url"], PRISON_JM)
+
+    def test_year_fact_has_no_relation(self):
+        client = good_client()
+        client.answers["country_fact_search"] = [fact_search(
+            found("UK", 1801, 1801, "https://www.britannica.com/place/United-Kingdom"),
+            found("Jamaica", 1962, 1962, "https://jis.gov.jm/information/independence"),
+            urls=("https://www.britannica.com/place/United-Kingdom", "https://jis.gov.jm/information/independence"))]
+        sel, facts = self.gather(client=client, sel=self.jamaica_selection("statehood"))
+        block, relation = df.fact_block(sel.country_fact, facts.country_fact)
+        self.assertEqual(relation, "")
+        self.assertNotIn("different years", block)
+        self.assertIn("| Year the present-day state was formed | 1801 | 1962 |",
+                      df.render_sections(sel, facts)["uk_vs_jamaica"])
+
+    def write(self, paragraph, fact_id="internet", observations=None):
+        observations = observations or {"GBR": {"value": 2.9, "year": 2024, "url": "u", "estimate": False, "via": "api"},
+                                        "JAM": {"value": 4.2, "year": 2024, "url": "v", "estimate": False, "via": "api"}}
+        fact = {"observations": observations, "searched": [], "search_actions": {}}
+        client = FakeClient({"country_fact": [response({"paragraph": paragraph}, tool_calls=[])]})
+        return df.write_country_fact(self.fact(fact_id), fact, client=client), client
+
+    def test_writer_accepts_free_paragraph_and_has_no_tools(self):
+        text = ("Most people in both countries go online. Jamaica's 4.2% is 1.3 percentage points higher than "
+                "the UK’s 2.9%, partly because figures are modelled.")
+        paragraph, client = self.write(text)
+        self.assertEqual(paragraph, text)
+        for key in ("tools", "tool_choice", "include"):
+            self.assertNotIn(key, client.requests[0])
+        self.assertIn("RELATION: 1.3 percentage points higher than the UK's", client.requests[0]["input"])
+
+    def test_writer_guards(self):
+        for bad in ("Jamaica's figure is higher than the UK's.",                                  # no relation
+                    "Jamaica's figure is 1.3 percentage points lower than the UK's.",              # wrong direction
+                    "Jamaica's figure is 1.3 percentage points higher than the UK's, up from 3.5%.",  # invented
+                    "Jamaica's figure is 1.3 percentage points higher than the UK's. " + "word " * 100,
+                    "Jamaica's figure is [1.3 percentage points higher than the UK's](https://evil.example).",
+                    ""):
+            with self.assertRaises(df.LLMError, msg=bad):
+                self.write(bad)
+        differ = {"GBR": {"value": 2.9, "year": 2025, "url": "u", "estimate": False, "via": "api"},
+                  "JAM": {"value": 4.2, "year": 2023, "url": "v", "estimate": False, "via": "api"}}
+        with self.assertRaises(df.LLMError):
+            self.write("Jamaica's figure is 1.3 percentage points higher than the UK's.", observations=differ)
+        self.assertTrue(self.write("In 2023 Jamaica's figure is 1.3 percentage points higher than the UK's "
+                                   "in 2025.", observations=differ)[0])
+
+    def test_writer_accepts_ordinary_prose_numbers(self):
+        ok = "In 2024, at 4.2% against 2.9%, Jamaica's figure is 1.3 percentage points higher than the UK's."
+        self.assertEqual(self.write(ok)[0], ok)
+        with self.assertRaises(df.LLMError):   # 4.2 is supplied only as a percentage
+            self.write("Jamaica's figure is 1.3 percentage points higher than the UK's, about 4.2 in every 100.")
+
+    def test_writer_numbers_need_their_unit_and_never_come_from_unit_notes(self):
+        with self.assertRaises(df.LLMError):   # 4.2 is supplied, but as a %, not years
+            self.write("Jamaica's figure is 1.3 percentage points higher than the UK's, at 4.2 years.")
+        searched = {"GBR": {"value": 133.0, "year": 2025, "url": PRISON_UK, "estimate": False, "via": "search",
+                            "unit_note": "Prisoners per 100,000 people on 31 March 2025.", "supports": "x"},
+                    "JAM": {"value": 129.0, "year": 2024, "url": PRISON_JM, "estimate": False, "via": "search",
+                            "unit_note": "Prisoners per 100,000 people.", "supports": "x"}}
+        relation = "97% of the UK's"
+        ok = f"Jamaica's rate is {relation}, with the UK's from 2025 and Jamaica's from 2024."
+        self.assertEqual(self.write(ok, "prison-rate", searched)[0], ok)
+        with self.assertRaises(df.LLMError):   # "31" appears only in the model-written unit note
+            self.write(ok + " The UK count was taken on 31 March.", "prison-rate", searched)
+        _, client = self.write(ok, "prison-rate", searched)
+        self.assertIn("it counts: Prisoners per 100,000 people on 31 March 2025.", client.requests[0]["input"])
+
+    def test_incomparable_fact_has_no_relation_and_shows_what_each_counts(self):
+        uk_url = "https://www.gov.uk/government/statistics/statutory-homelessness-in-england"
+        jm_url = "https://jis.gov.jm/homeless-count"
+        client = good_client()
+        client.answers["country_fact_search"] = [fact_search(
+            found("UK", 135580, 2026, uk_url, unit_note="Households in temporary accommodation in England."),
+            found("Jamaica", 2261, 2025, jm_url, unit_note="People found to be homeless in a street count."),
+            urls=(uk_url, jm_url))]
+        sel, facts = self.gather(client=client, sel=self.jamaica_selection("homelessness"))
+        block, relation = df.fact_block(sel.country_fact, facts.country_fact)
+        self.assertEqual(relation, "")
+        self.assertNotIn("RELATION", block)
+        facts.fact_text = None
+        section = df.render_sections(sel, facts)["uk_vs_jamaica"]
+        self.assertIn("| 135,580 (2026) | 2,261 (2025) |", section)
+        self.assertIn("**What the figures count:** UK: Households in temporary accommodation in England. "
+                      "Jamaica: People found to be homeless in a street count.", section)
+        self.assertIn("The UK's figure is 135,580 (2026) and Jamaica's is 2,261 (2025).\n", section)  # no comparison
+        self.assertFalse([f["id"] for f in self.data["country_facts"]
+                          if f["id"] in ("homelessness", "statehood") and f.get("comparable", True)])
+
+    def test_imf_search_fallback_keeps_the_api_year_policy_and_estimates(self):
+        page = "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/JAM"
+        client = FakeClient({"country_fact_search": [fact_search(found("UK", 102.0, 2026, page),
+                                                                 found("Jamaica", 66.0, 2025, page), urls=[page])]})
+        result = df.search_country_fact(self.fact("gov-debt"), ["GBR", "JAM"], DATE, client=client)
+        self.assertEqual(result["rejected"], {"GBR": "implausible year"})   # 2026 is still a projection
+        self.assertTrue(result["observations"]["JAM"]["estimate"])
+        self.assertIn("may be an IMF estimate", df.fact_block(self.fact("gov-debt"), {
+            "observations": result["observations"], "searched": ["JAM"], "search_actions": {}})[0])
+
+    def test_who_staleness_threshold(self):
+        _, facts = self.gather(sel=self.jamaica_selection("life-expectancy"))   # 2023 figures in 2026
+        self.assertFalse(any("figure is from" in d for d in facts.diagnostics))
+        routes = default_routes()
+        routes["ghoapi.azureedge.net"] = lambda url: who_page(url, [r for r in WHO_ROWS if r["TimeDim"] == 2022])
+        _, facts = self.gather(routes, sel=self.jamaica_selection("life-expectancy"))
+        self.assertTrue(any("figure is from 2022" in d for d in facts.diagnostics))
+
+    def test_writer_failure_uses_code_sentence(self):
+        client = good_client()
+        client.answers["country_fact"] = [RuntimeError("down")]
+        sel, facts = self.gather(client=client)
+        section = df.render_sections(sel, facts)["uk_vs_jamaica"]
+        self.assertIn(f"{sel.country_fact['meaning']} The UK's figure is 2.9% (2024) and Jamaica's is 4.2% (2024). "
+                      "Jamaica's figure is 1.3 percentage points higher than the UK's.", section)
+        self.assertTrue(any("UK vs Jamaica writer failed twice" in d for d in facts.diagnostics))
+
+    def test_imf_estimates_are_described_to_the_writer(self):
+        client = good_client()
+        sel, facts = self.gather(client=client, sel=self.jamaica_selection("gov-debt"))
+        block = next(r["input"] for r in client.requests if r["text"]["format"]["name"] == "country_fact")
+        self.assertIn("UK: 102.1% (2025) (IMF World Economic Outlook data, may be an IMF estimate)", block)
+        self.assertIn("RELATION: 36.1 percentage points lower than the UK's", block)
+
+    def test_fact_recorded_in_state(self):
+        state_path = os.path.join(self.tmp, "state.json")
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), \
+                patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+            df.main(["--date", "2026-10-10", "--state", state_path], client=good_client())
+        entry = df.load_state(state_path)["sent"]["2026-10-10"]
+        self.assertEqual(entry["country_fact"], df.select(DATE, self.data).country_fact["id"])
+        self.assertIn("country_fact_sources", entry)
 
 
 # ---------- tomorrow's date + date line ----------
@@ -1264,70 +1571,135 @@ class TargetDateTests(Base):
 
 # ---------- weather (Open-Meteo + call E) ----------
 
+UTC = datetime.timezone.utc
+
+
+def utc(*args):
+    return datetime.datetime(*args, tzinfo=UTC)
+
+
 WEATHER = {"description": "light rain", "high": "20°C", "low": "13°C", "rain_chance": "64%",
-           "rain_ranges": ["13:00 to 16:00"], "sunrise": "07:20", "sunset": "18:11"}
+           # 13:00-16:00 London (BST) on DATE
+           "rain_periods": [{"start": utc(2026, 10, 10, 12), "end": utc(2026, 10, 10, 15), "kind": "showers",
+                             "intensity": "light"}],
+           "sunrise": "07:20 (7:20am)", "sunset": "18:11 (6:11pm)"}
 
 
 def weather_client(*paragraphs):
     return FakeClient({"weather": [response({"paragraph": p}, tool_calls=[]) for p in paragraphs]})
 
 
+def periods(first_end, chances, amounts=None, codes=None):
+    """rain_periods() over consecutive hourly labels from first_end, as
+    (London start, London end, kind, intensity)."""
+    instants = [first_end + datetime.timedelta(hours=i) for i in range(len(chances))]
+    amounts = amounts or [0.0] * len(chances)
+    codes = codes or [3] * len(chances)
+    return [(df._clock(p["start"]), df._clock(p["end"]), p["kind"], p["intensity"])
+            for p in df.rain_periods(instants, chances, amounts, codes)]
+
+
 class WeatherTests(Base):
-    def fetch(self, route=forecast):
+    def fetch(self, route=forecast, date=DATE):
         with patch.object(df, "http_get", FakeHTTP({"api.open-meteo.com": route})):
-            return df.croydon_weather(DATE)
+            return df.croydon_weather(date)
 
     def test_forecast_becomes_code_strings(self):
         self.assertEqual(self.fetch(), WEATHER)
 
-    def test_rain_ranges(self):
-        hours = [f"2026-10-10T{h:02d}:00" for h in range(24)]
+    def test_requests_the_date_and_the_next(self):
+        http = FakeHTTP({"api.open-meteo.com": forecast})
+        with patch.object(df, "http_get", http):
+            df.croydon_weather(DATE)
+        self.assertIn("start_date=2026-10-10&end_date=2026-10-11", http.calls[0])
+
+    def test_clock_gives_both_forms_in_london_time(self):
+        self.assertEqual([df._clock(utc(2026, 10, 10, h)) for h in (23, 8, 11, 14)],
+                         ["midnight", "09:00 (9am)", "12:00 (midday)", "15:00 (3pm)"])
+        self.assertEqual(df._clock(utc(2026, 10, 27, 6, 44)), "06:44 (6:44am)")   # GMT
+        self.assertEqual(df._forms("15:00 (3pm)"), ["15:00", "3pm"])
+
+    def test_each_label_covers_the_preceding_hour(self):
+        # Labels 10:00..13:00 BST; a 60% chance on the 11:00 label is rain from 10:00 to 11:00.
+        self.assertEqual(periods(utc(2026, 10, 10, 9), [0, 60, 0, 0]),
+                         [("10:00 (10am)", "11:00 (11am)", "rain", "light")])
+        self.assertEqual(periods(utc(2026, 10, 10, 9), [10, 0, 0.0, 0], amounts=[0, 0, 0.1, 0]),
+                         [("11:00 (11am)", "12:00 (midday)", "rain", "light")])
         chances = [0] * 24
-        self.assertEqual(df.rain_ranges(hours, chances), [])
         for h in (6, 7, 13, 14, 15, 23):
             chances[h] = 50                     # 50% counts as likely; 49% does not
         chances[9] = 49
-        self.assertEqual(df.rain_ranges(hours, chances), ["06:00 to 08:00", "13:00 to 16:00", "23:00 to midnight"])
-        # Clocks going back: the repeated 01:00 hour stays one run.
-        fall_back = ["2026-10-25T00:00", "2026-10-25T01:00", "2026-10-25T01:00", "2026-10-25T02:00"]
-        self.assertEqual(df.rain_ranges(fall_back, [60, 60, 60, 0]), ["00:00 to 02:00"])
-        # Clocks going forward: 01:00 does not exist, so 00:00 then 02:00 are consecutive...
-        spring = [f"2026-03-29T{h:02d}:00" for h in (0, 2, 3, 4)]
-        self.assertEqual(df.rain_ranges(spring, [60, 60, 0, 60]), ["00:00 to 03:00", "04:00 to 05:00"])
-        # ...but a real one-hour gap on an ordinary day is not.
-        ordinary = [f"2026-10-10T{h:02d}:00" for h in (0, 2)]
-        self.assertEqual(df.rain_ranges(ordinary, [60, 60]), ["00:00 to 01:00", "02:00 to 03:00"])
+        got = periods(utc(2026, 10, 10, 0), chances)   # labels 01:00..24:00 BST
+        self.assertEqual([p[:2] for p in got], [("06:00 (6am)", "08:00 (8am)"), ("13:00 (1pm)", "16:00 (4pm)"),
+                                                ("23:00 (11pm)", "midnight")])
 
-    def test_london_hours(self):
-        self.assertEqual(df.london_hours(datetime.date(2026, 10, 10)), list(range(24)))
-        self.assertEqual(df.london_hours(datetime.date(2026, 3, 29)), [0] + list(range(2, 24)))
-        self.assertEqual(df.london_hours(datetime.date(2026, 10, 25)), list(range(24)))
+    def test_spring_forward_day(self):
+        # 29 March 2026: 00:00 GMT to 23:00 UTC; 01:00 London never happens.
+        day = datetime.date(2026, 3, 29)
+        self.assertEqual(df.london_day(day), (utc(2026, 3, 29, 0), utc(2026, 3, 29, 23)))
+        # Wet 00:00-01:00 GMT and the next real hour (02:00-03:00 BST): one spell, ending at a real time.
+        self.assertEqual(periods(utc(2026, 3, 29, 1), [60, 60, 0]), [("midnight", "03:00 (3am)", "rain", "light")])
+        # The whole day through the fetch: 23 labels inside it (offset GMT at the start).
+        w = self.fetch(lambda url: forecast(url, chances=[0] * 22 + [70], amounts=[], offset=0), date=day)
+        self.assertEqual([(df._clock(p["start"]), df._clock(p["end"])) for p in w["rain_periods"]],
+                         [("23:00 (11pm)", "midnight")])
+
+    def test_fall_back_day(self):
+        # 25 October 2026: 23:00 UTC on the 24th to 00:00 UTC on the 26th, 25 real hours.
+        day = datetime.date(2026, 10, 25)
+        self.assertEqual(df.london_day(day), (utc(2026, 10, 24, 23), utc(2026, 10, 26, 0)))
+        # Wet from London midnight through both 01:00 hours: three real hours, one spell, ending 02:00 GMT.
+        self.assertEqual(periods(utc(2026, 10, 25, 0), [60, 60, 60, 0]),
+                         [("midnight", "02:00 (2am)", "rain", "light")])
+        # Through the fetch (fixed +1 offset): the 25th real hour exists and can be wet.
+        w = self.fetch(lambda url: forecast(url, chances=[0] * 24 + [70], amounts=[]), date=day)
+        self.assertEqual([(df._clock(p["start"]), df._clock(p["end"])) for p in w["rain_periods"]],
+                         [("23:00 (11pm)", "midnight")])
+
+    def test_gmt_date_with_bst_offset_labels(self):
+        # Open-Meteo kept the +1 offset for 27 October (GMT): its 07:44 sunrise label is 06:44 London.
+        w = self.fetch(lambda url: forecast(url, chances=[0] * 24, sunrise="2026-10-27T07:44"),
+                       date=datetime.date(2026, 10, 27))
+        self.assertEqual(w["sunrise"], "06:44 (6:44am)")
+
+    def test_intensity_bands_and_kinds(self):
+        start = utc(2026, 10, 10, 9)
+        for peak, intensity in ((0.0, "light"), (0.49, "light"), (0.5, "moderate"), (4.0, "moderate"),
+                                (4.1, "heavy")):
+            self.assertEqual(periods(start, [60, 60, 0], [0.0, peak, 0.0])[0][3], intensity, peak)
+        for codes, kind in (([51, 3, 3], "drizzle"), ([63, 3, 3], "rain"), ([81, 61, 3], "showers"),
+                            ([73, 3, 3], "snow"), ([95, 81, 3], "thunderstorms"), ([3, 3, 3], "rain")):
+            self.assertEqual(periods(start, [60, 60, 0], codes=codes)[0][2], kind, codes)
 
     def test_hourly_coverage_required(self):
-        def hourly(url, hours, chances):
+        def edited(url, edit):
             data = json.loads(forecast(url))
-            day = data["daily"]["time"][0]
-            data["hourly"] = {"time": [f"{day}T{h:02d}:00" for h in hours], "precipitation_probability": chances}
+            edit(data["hourly"])
             return json.dumps(data).encode()
-        for hours, chances in ((range(23), [0] * 23),                 # 23:00 missing on an ordinary day
-                               (range(24), [0] * 23 + [None]),        # one hour without a value
-                               (range(24), [0] * 23),                 # values shorter than times
-                               (range(24), [0] * 23 + ["10"]),        # non-numeric
-                               ([], [])):                              # no hourly data at all
-            with self.assertRaises(df.FetchError, msg=(list(hours), chances)):
-                self.fetch(lambda url: hourly(url, hours, chances))
-        # A spring-forward day is complete without the non-existent 01:00.
-        spring = [0] + list(range(2, 24))
-        with patch.object(df, "http_get", FakeHTTP({"api.open-meteo.com": lambda url: hourly(
-                url.replace("2026-10-10", "2026-03-29"), spring, [0] * 23)})):
-            self.assertEqual(df.croydon_weather(datetime.date(2026, 3, 29))["rain_ranges"], [])
+        for edit in (lambda h: [h[k].pop(10) for k in h],                     # an hour of the day missing
+                     lambda h: h["time"].__setitem__(10, h["time"][9]),       # a duplicate hides a missing hour
+                     lambda h: h["precipitation_probability"].__setitem__(10, None),
+                     lambda h: h["precipitation"].__setitem__(24, None),       # the day's last hour
+                     lambda h: h["precipitation_probability"].__setitem__(5, "10"),
+                     lambda h: h["precipitation"].pop(),                       # lengths differ
+                     lambda h: [h[k].clear() for k in h]):
+            with self.assertRaises(df.FetchError):
+                self.fetch(lambda url, edit=edit: edited(url, edit))
+        # The previous day's last hour (the date's 00:00 label) is not part of the day.
+        self.assertEqual(self.fetch(lambda url: edited(url, lambda h: h["precipitation_probability"].__setitem__(
+            0, 90)))["rain_periods"], WEATHER["rain_periods"])
+        # Values outside the London day are not needed.
+        self.assertEqual(self.fetch(lambda url: edited(url, lambda h: h["precipitation"].__setitem__(30, None)))
+                         ["rain_chance"], "64%")
 
     def test_temperatures_rounded_half_up(self):
         w = self.fetch(lambda url: forecast(url, temperature_2m_max=12.5, temperature_2m_min=-0.4))
         self.assertEqual((w["high"], w["low"]), ("13°C", "0°C"))
 
     def test_no_rain_hours(self):
-        self.assertEqual(self.fetch(lambda url: forecast(url, chances=[10] * 24))["rain_ranges"], [])
+        self.assertEqual(self.fetch(lambda url: forecast(url, chances=[10] * 24, amounts=[0.0] * 24))["rain_periods"],
+                         [])
+
 
     def test_malformed_forecast_is_fetch_error(self):
         for bad in (lambda url: forecast(url, temperature_2m_max=None), lambda url: forecast(url, weather_code=7),
@@ -1338,32 +1710,55 @@ class WeatherTests(Base):
             with self.assertRaises(df.FetchError):
                 self.fetch(bad)
 
-    def test_call_e_accepts_grounded_paragraph(self):
+    def test_call_e_accepts_free_wording(self):
         client = weather_client(GOOD_E["paragraph"])
         self.assertEqual(df.write_weather(WEATHER, client=client), GOOD_E["paragraph"])
         req = client.requests[0]
         for key in ("tools", "tool_choice", "include"):
             self.assertNotIn(key, req)
-        self.assertIn("RAIN LIKELY: 13:00 to 16:00", req["input"])
-        self.assertIn("SUNRISE: 07:20", req["input"])
+        self.assertIn("RAIN PERIODS: \n- light showers from 13:00 (1pm) to 16:00 (4pm)", req["input"])
+        self.assertIn("SUNRISE: 07:20 (7:20am)", req["input"])
+        # Either form of the start time will do; sunrise and the exact shape are optional.
+        self.assertTrue(df.write_weather(WEATHER, client=weather_client(
+            "Showers are likely from 13:00, light ones. High 20°C, low 13°C.")))
+        self.assertIn("ONE form", req["instructions"])
 
     def test_call_e_guards(self):
         good = GOOD_E["paragraph"]
-        for bad in (good.replace("07:20", "around dawn"),             # sunrise missing
-                    good.replace("20°C", "21°C"),                       # changed number
-                    good.replace("from 13:00 to 16:00", "in the afternoon"),  # range missing
-                    good.replace("light rain", "sunshine"),            # conditions changed
+        for bad in (good.replace("20°C", "21°C"),                     # high changed
+                    good.replace("a high of 20°C and a low of 13°C", "a high of 13°C"),  # low missing
+                    good.replace("from 1pm", "from the afternoon"),     # rain start missing
+                    good.replace("from 1pm", "from 11pm"),              # "1pm" inside "11pm" does not count
+                    good.replace("from 1pm", "from 13:00 (1pm)"),       # a time in both forms
+                    good + " Sunrise is at 07:20, that is 7:20am.",     # likewise
+                    good + " Otherwise no rain is expected.",           # dry claim on a wet day
                     good + " Expect 5 mm.",                            # invented number
-                    good + " Stay dry" * 20,                           # over 70 words
+                    good + " Rain is 13% likely.",                     # a supplied number with another unit
+                    good + " Showers until 20pm.",                     # likewise
+                    # Swapped high and low (both strings present, roles reversed).
+                    good.replace("a high of 20°C and a low of 13°C", "a high of 13°C and a low of 20°C"),
+                    good.replace("a high of 20°C and a low of 13°C", "temperatures dropping to 20°C, peaking at "
+                                                                     "13°C"),
+                    good.replace("a high of 20°C and a low of 13°C", "20°C and 13°C"),   # no roles at all
+                    good + " Stay dry" * 40,                           # over the length cap
                     good + " See https://evil.example"):
             with self.assertRaises(df.LLMError, msg=bad):
                 df.write_weather(WEATHER, client=weather_client(bad))
-        dry = dict(WEATHER, rain_ranges=[])
-        with self.assertRaises(df.LLMError):   # the no-rain phrase is required when no hour is likely
-            df.write_weather(dry, client=weather_client(good.replace("It will likely rain from 13:00 to 16:00.", "")))
+        dry = dict(WEATHER, rain_periods=[])
+        self.assertIn("RAIN PERIODS: none", df.weather_block(dry))
         self.assertTrue(df.write_weather(dry, client=weather_client(
-            good.replace("It will likely rain from 13:00 to 16:00.",
-                         "No single hour is more likely than not to see rain."))))
+            "A dry, grey day with no rain expected: a high of 20°C and a low of 13°C.")))
+        # Whole values only: a low of 3°C is not found inside "13°C".
+        cold = dict(dry, high="13°C", low="3°C")
+        with self.assertRaises(df.LLMError):
+            df.write_weather(cold, client=weather_client("A high of 13°C and a low of 13°C."))
+        self.assertTrue(df.write_weather(cold, client=weather_client("A high of 13°C and a low of 3°C.")))
+        # A supplied number cannot reappear with another unit, recognised or not.
+        with self.assertRaises(df.LLMError):
+            df.write_weather(dry, client=weather_client("A high of 20°C and a low of 13°C, with winds of 13 knots."))
+        for ok in ("Warmest at 20°C, cooling to an overnight 13°C.",
+                   "Up to 20°C this afternoon, down to 13°C tonight. Rain is unlikely, about a 64 per cent chance."):
+            self.assertEqual(df.write_weather(dry, client=weather_client(ok)), ok)
 
     def test_rendered_with_source(self):
         sel, facts = self.gather()
@@ -1377,10 +1772,16 @@ class WeatherTests(Base):
         sel, facts = self.gather(client=client)
         weather = df.render_sections(sel, facts)["weather"]
         self.assertIn(df.weather_sentence(WEATHER), weather)
-        self.assertEqual(df.weather_sentence(WEATHER), GOOD_E["paragraph"])
+        self.assertEqual(df.weather_sentence(WEATHER),
+                         "Today's weather is light rain, with a high of 20°C and a low of 13°C. Expect light "
+                         "showers from 1pm to 4pm. Sunrise is at 7:20am and sunset at 6:11pm.")
         self.assertTrue(any("Weather writer (call E) failed twice" in d for d in facts.diagnostics))
-        self.assertEqual(df.weather_sentence(dict(WEATHER, rain_ranges=["06:00 to 08:00", "13:00 to 16:00"])).count(
-            "It will likely rain from 06:00 to 08:00 and from 13:00 to 16:00."), 1)
+        two = dict(WEATHER, rain_periods=[{"start": utc(2026, 10, 10, 5), "end": utc(2026, 10, 10, 7),
+                                           "kind": "rain", "intensity": "heavy"}] + WEATHER["rain_periods"])
+        self.assertIn("Expect heavy rain from 6am to 8am and light showers from 1pm to 4pm.",
+                      df.weather_sentence(two))
+        self.assertIn("Rain is unlikely, with no more than a 64% chance in any hour.",
+                      df.weather_sentence(dict(WEATHER, rain_periods=[])))
 
     def test_fetch_failure_is_unavailable_and_others_render(self):
         routes = default_routes()
@@ -1676,7 +2077,8 @@ class MainTests(Base):
         self.assertNotIn("--no-send-to-kindle", run.call_args.args[0])
         warnings = df.load_state(self.state_path)["sent"]["2026-10-10"]["warnings"]
         self.assertIn("Population unavailable (World Bank SP.POP.TOTL: TimeoutError).", warnings)
-        self.assertTrue(any(w.startswith("UK economy fact unavailable") for w in warnings))
+        if df.select(DATE, df.load_data()).country_fact["source"] == "worldbank":
+            self.assertTrue(any(w.startswith("UK vs Jamaica: World Bank API unavailable") for w in warnings))
 
     def test_warning_without_details_is_recorded_and_annotated(self):
         client = good_client()

@@ -27,7 +27,7 @@ import daily_facts as df
 LIVE = os.environ.get("DAILY_FACTS_LIVE") == "1"
 # Parsed only when live, so a bad value cannot break ordinary discovery.
 DATE = datetime.date.fromisoformat(os.environ.get("DAILY_FACTS_LIVE_DATE", "2026-10-11")) if LIVE else None
-HEADINGS = ("## Weather in Croydon", "## Trains", "### Windrush line", "### Thameslink", "## Flag of the Day", "## Research Fact", "## AI Engineering", "## UK Economy", "## Jamaica Economy")
+HEADINGS = ("## Weather in Croydon", "## Trains", "### Windrush line", "### Thameslink", "## Flag of the Day", "## Research Fact", "## AI Engineering", "## UK vs Jamaica")
 
 
 def setUpModule():
@@ -63,24 +63,37 @@ class LiveComparisonTests(unittest.TestCase):
     def test_land_smaller_country(self):
         self.assertIn("smaller than the uk", self.land("JAM").lower())
 
-    def economy_facts(self):
+
+
+@unittest.skipUnless(LIVE, "live smoke tests: set DAILY_FACTS_LIVE=1")
+class LiveCountryFactTests(unittest.TestCase):
+    """One fact from each API adapter (IMF, WHO, World Bank) and one
+    search-only fact through call G, each written up by the fact writer."""
+
+    def fact(self, fact_id):
+        data = df.load_data()
+        sel = df.select(DATE, data)
+        sel.country_fact = next(f for f in data["country_facts"] if f["id"] == fact_id)
         facts = df.Facts()
-        facts.jm_econ = df._gather_economy(self.sel, facts, df.JAMAICA, "Jamaica", self.sel.jm_indicators)
-        self.assertIsNotNone(facts.jm_econ, facts.diagnostics)
-        return facts
+        facts.country_fact = df._gather_country_fact(sel, facts, client=df._openai_client())
+        block, _ = df.fact_block(sel.country_fact, facts.country_fact)
+        paragraph = df.write_country_fact(sel.country_fact, facts.country_fact, client=df._openai_client())
+        print(f"\n{block}\n-> {paragraph}\n{facts.diagnostics}")
+        return facts.country_fact
 
-    def test_economy_pair(self):
-        facts = self.economy_facts()
-        facts.jm_uk = df._gather_uk_equivalent(self.sel, facts, facts.jm_econ)
-        self.assertIsInstance(facts.jm_uk, dict, facts.diagnostics)
-        self.sentence(*df.economy_block(self.sel, facts))
+    def test_api_facts(self):
+        for fact_id in ("gov-debt", "life-expectancy", "internet"):
+            observations = self.fact(fact_id)["observations"]
+            self.assertEqual(set(observations), {df.UK, df.JAMAICA}, fact_id)
+            self.assertEqual({obs["via"] for obs in observations.values()}, {"api"}, fact_id)
 
-    def test_economy_no_uk_data(self):
-        facts = self.economy_facts()
-        facts.jm_uk = "no_data"
-        block, relation = df.economy_block(self.sel, facts)
-        self.assertEqual(relation, "")
-        self.sentence(block, relation)
+    def test_search_only_fact(self):
+        fact = self.fact("prison-rate")
+        self.assertTrue(fact["search_actions"])
+        self.assertEqual(set(fact["observations"]), {df.UK, df.JAMAICA})   # never vacuous
+        for obs in fact["observations"].values():
+            self.assertEqual(obs["via"], "search")
+            self.assertTrue(df._allowed_host(obs["url"], ["prisonstudies.org"]))
 
 
 @unittest.skipUnless(LIVE, "live smoke tests: set DAILY_FACTS_LIVE=1")
@@ -95,7 +108,7 @@ class LiveWeatherAndTrainsTests(unittest.TestCase):
         weather = df.croydon_weather(self.date)
         paragraph = df.write_weather(weather, client=df._openai_client())  # raises if guards fail
         print(f"\n{df.weather_block(weather)}\n-> {paragraph}")
-        self.assertIn(weather["sunrise"], paragraph)
+        self.assertIn(weather["high"], paragraph)
 
     def test_thameslink_check(self):
         result = df.thameslink_disruptions(self.date, client=df._openai_client())  # raises if unvalidated
@@ -134,7 +147,7 @@ class LiveFullDayTests(unittest.TestCase):
         self.assertNotIn("UK comparison unavailable", markdown)
         if df.select(DATE, df.load_data()).country["cca3"] != df.UK:
             self.assertIn("**Size vs UK:**", markdown)
-        self.assertIn("**vs UK:**", markdown.split("## Jamaica Economy", 1)[1])
+        self.assertNotIn("not available today", markdown.split("## UK vs Jamaica", 1)[1])
         with open(state, "rb") as f:
             self.assertEqual(f.read(), before)
 

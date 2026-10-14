@@ -366,8 +366,9 @@ only happens if GitHub delays it by more than about 6 hours. Backfill a
 missed date locally with `--date`.
 
 Under the title is a date line ("Today is Tuesday 13th October 2026."). It
-has seven sections: Weather in Croydon, Trains, Flag of the Day, Research
-Fact, AI Engineering topic, UK Economy, and Jamaica Economy. It is separate
+has six sections: Weather in Croydon, Trains, Flag of the Day, Research
+Fact, AI Engineering topic, and UK vs Jamaica (one fact a day, for both
+countries). It is separate
 from the NTIY automation: its own workflow, concurrency group and state
 branch.
 
@@ -377,26 +378,37 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
            -> md_to_kindle.py (EPUB + Send to Kindle) -> record date on daily-facts-state
 ```
 
-- **Selection:** the country, research topic, AI theme and UK/Jamaica
-  indicators are date-seeded permutations over the lists in
+- **Selection:** the country, research topic, AI theme and UK vs Jamaica
+  fact are date-seeded permutations over the lists in
   `daily_facts_data/`. The same date always gives the same picks, and every
   item is used once before any repeats. Editing a list reshuffles its
   rotation once.
 - **Sources:** the country details come from `countries.json` (193 UN
   members, trimmed from [mledoze/countries](https://github.com/mledoze/countries),
-  ODbL). Population, land area and economy figures come from the
-  [World Bank API](https://data.worldbank.org/). The population and land-area
-  comparisons use the newest year both countries have. Jamaica's indicator is
-  also fetched for the UK, for Jamaica's year if the UK has it, otherwise the
-  UK's latest. Flags come from
+  ODbL). Population and land area come from the
+  [World Bank API](https://data.worldbank.org/); both comparisons use the
+  newest year both countries have. The UK vs Jamaica fact
+  (`daily_facts_data/country_facts.json`: economy, society, health and
+  history) comes from the World Bank, the
+  [IMF DataMapper](https://www.imf.org/external/datamapper/) (World Economic
+  Outlook; the current year's projection is dropped and figures are described
+  as possible estimates) or [WHO's GHO API](https://www.who.int/data/gho)
+  (sex and age dimensions pinned per entry; an ambiguous answer is an
+  error), using the newest year both countries have, else each country's
+  latest, with the years stated. A country the API lacks, or both when it
+  fails, goes to call G below; a few facts with no API (homelessness, prison
+  population, year of statehood) always do. Flags come from
   [flagcdn](https://flagcdn.com/) and are embedded locally. Article
   summaries come from the Wikipedia REST API. Croydon's forecast comes from
   [Open-Meteo](https://open-meteo.com/): code turns it into the conditions
-  (WMO code), whole-degree high and low, the highest rain chance, the hours
-  when rain is likely (hourly chance of 50% or more, merged into ranges
-  such as "13:00 to 16:00"; on the day the clocks go forward, 00:00 and
-  02:00 count as consecutive), and sunrise and sunset. Every hour that
-  exists that London day must have a numeric rain chance, otherwise the
+  (WMO code), whole-degree high and low, the highest rain chance, rain
+  periods with type and intensity (see call E), and sunrise and sunset.
+  Open-Meteo labels every time with one fixed UTC offset for the whole
+  response (even across a clock change), and each hourly value covers the
+  preceding hour, so code turns each label into a real-time interval, keeps
+  the 23, 24 or 25 real hours of the London date (the next day is requested
+  for the final hour) and shows times on the London clock. Every one of
+  those hours must have a numeric rain chance and amount, otherwise the
   section is unavailable: "no rain" is never concluded from missing data.
   Planned Windrush line (London Overground) disruption comes from the TfL
   Unified API: a status
@@ -432,26 +444,49 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
     sources; unsourced ones are dropped, as are all of them if the source
     check fails. These notes are stored in state with their URL but are not
     counted as warnings.
-  - Call D writes one sentence comparing a figure with the UK's: today's
-    country's land area (under the flag table, skipped when the country is
-    the UK) and Jamaica's indicator (in the Jamaica section). It has no
-    tools and runs once per comparison. Code supplies both values, their
+  - Call D writes one sentence comparing today's country's land area with
+    the UK's (under the flag table, skipped when the country is the UK). It
+    has no tools. Code supplies both values, their
     years and a computed relation phrase, such as "96% smaller than the UK"
     or "1.1 percentage points higher than the UK's". The sentence is rejected,
     retried once and then shown as "UK comparison unavailable today" if it
     is more than one sentence, lacks that phrase word for word, leaves out
     either year when the two years differ, or contains a number (with its
-    sign and million/billion/trillion) that was not supplied. If the UK has
-    no figure, or it could not be fetched, the sentence says so. Call C is
+    sign and million/billion/trillion) that was not supplied. Call C is
     told these percentages are code-computed and not to recompute them.
-  - Call E writes the weather paragraph ("Today's weather is ... Chances of
-    rain are ... It will likely rain ... Sunrise is at ...") from the
-    code-built forecast strings. It has no tools. The paragraph is rejected
-    unless it contains every one of those strings verbatim (conditions,
-    high, low, rain chance, each rain range or "No single hour is more
-    likely than not to see rain", sunrise, sunset), stays within 70 words
-    and uses no number that was not supplied. If it fails twice, a
-    code-built sentence in the same shape is shown instead.
+  - The UK vs Jamaica writer turns the code-built table values into two to
+    four free sentences (at most 80 words): what the figure measures, how
+    the countries compare, perhaps why. It has the same guards as call D
+    (relation phrase verbatim when comparable, both years when they differ,
+    numbers only with their supplied units, never from call G's own unit
+    notes); if it fails twice, a code-built paragraph is shown. The table
+    cells are always code-formatted. Facts marked `"comparable": false`
+    (homelessness, year of statehood) get no ratio or gap, and call G's
+    description of what each figure counts is shown under the table.
+  - Call G is that fact's fallback: a web search (at most two tool calls)
+    restricted to the fact's own domains (the API organisation's site, or a
+    search fact's listed sites), returning a value, year, unit note and URL
+    per requested country. Each country is validated on its own: a finite
+    value, a year within 15 years (or a plausible year for "year" facts; no
+    current-year projection for IMF facts, which are always described as
+    possible estimates),
+    and a URL matching a page the search tool returned on an allowed domain,
+    rendered as the tool's own URL. A failed country shows "not available
+    today"; figures it supplies carry a visible note that an AI (LLM) web
+    search found them.
+  - Call E writes the weather paragraph in free wording (two to four
+    sentences, at most 80 words) from a code-built forecast block: whether
+    it is wet or dry, when and how heavy any rain is, and the high and low.
+    Code derives rain periods from hourly precipitation probability (50% or
+    more) and forecast precipitation (0.1 mm or more), with the type from the WMO weather
+    code (drizzle, rain, showers, snow, thunderstorms) and the intensity from
+    the peak mm/h on the Met Office bands (light below 0.5, moderate up to 4,
+    heavy above). Times are supplied as "15:00 (3pm)" and the model writes
+    each in one form. The paragraph is rejected unless the high and low each
+    follow a matching role word ("a high of", "down to" ...), each rain
+    period's start appears, no time appears in both forms, there is no "no
+    rain"/"dry all day" claim on a wet day, and every number appears in the
+    block with the same unit (°C, %, am/pm, mm ...). If it fails twice, a code-built paragraph is shown.
   - Call F checks Thameslink. No keyless API lists planned National Rail
     engineering works (TfL's `thameslink` line shows Good Service for every
     future date, and the Rail Data Marketplace needs a registered key), so
