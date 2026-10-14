@@ -396,8 +396,10 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
   (sex and age dimensions pinned per entry; an ambiguous answer is an
   error), using the newest year both countries have, else each country's
   latest, with the years stated. A country the API lacks, or both when it
-  fails, goes to call G below; a few facts with no API (homelessness, prison
-  population, year of statehood) always do. Flags come from
+  fails, goes to call G below; facts with no API (homelessness, prison
+  population, year of statehood, and four UN series: Human Development
+  Index, homicide rate, under-five mortality, women in parliament) always
+  do. Flags come from
   [flagcdn](https://flagcdn.com/) and are embedded locally. Article
   summaries come from the Wikipedia REST API. Croydon's forecast comes from
   [Open-Meteo](https://open-meteo.com/): code turns it into the conditions
@@ -454,39 +456,58 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
     either year when the two years differ, or contains a number (with its
     sign and million/billion/trillion) that was not supplied. Call C is
     told these percentages are code-computed and not to recompute them.
+  - Code decides whether the two figures are compared at all
+    (`comparability()`, recorded in state): only for a `"harmonised"`
+    series (one organisation's internationally comparable definition), with
+    both figures from that entry's own dataset (its API, or call G's first
+    tier on its own sites) and, for ratios, a positive UK value. Otherwise no
+    ratio or gap is computed and the section says "Not compared: <reason>"
+    (national definitions differ, the UK figure covers England and Wales
+    only, or a figure came from a different source).
   - The UK vs Jamaica writer turns the code-built table values into two to
-    four free sentences (at most 80 words): what the figure measures, how
-    the countries compare, perhaps why. It has the same guards as call D
-    (relation phrase verbatim when comparable, both years when they differ,
-    numbers only with their supplied units, never from call G's own unit
-    notes); if it fails twice, a code-built paragraph is shown. The table
-    cells are always code-formatted. Facts marked `"comparable": false`
-    (homelessness, year of statehood) get no ratio or gap, and call G's
-    description of what each figure counts is shown under the table.
+    four free sentences (at most 80 words): what the figure measures and,
+    when compared, how the countries compare. It may give no causes
+    ("because", "due to", "driven by" ... are rejected), and without a
+    relation it may not compare at all ("higher", "fewer", "times" ...). It
+    has the same guards as call D (relation phrase verbatim, both years
+    when they differ, numbers only with their supplied units, never from
+    call G's own unit notes); if it fails twice, a code-built paragraph is
+    shown. The table cells are always code-formatted, and call G's
+    description of what each searched figure counts is shown under the table.
   - Call G is that fact's fallback: a web search (at most two tool calls)
-    restricted to the fact's own domains (the API organisation's site, or a
-    search fact's listed sites), returning a value, year, unit note and URL
-    per requested country. Each country is validated on its own: a finite
+    restricted first to the fact's own domains (the API organisation's
+    site, or a search fact's listed sites), then, for a country still
+    missing, to a short list of official and international statistics sites
+    (tier 2). It returns, per requested country, a value, year, unit note,
+    URL and whether the page's figure is the same measure for the entry's
+    geography (the whole country unless the entry says, for example,
+    England). Each country is validated on its own: same measure, a finite
     value, a year within 15 years (or a plausible year for "year" facts; no
-    current-year projection for IMF facts, which are always described as
-    possible estimates),
-    and a URL matching a page the search tool returned on an allowed domain,
-    rendered as the tool's own URL. A failed country shows "not available
-    today"; figures it supplies carry a visible note that an AI (LLM) web
-    search found them.
-  - Call E writes the weather paragraph in free wording (two to four
-    sentences, at most 80 words) from a code-built forecast block: whether
-    it is wet or dry, when and how heavy any rain is, and the high and low.
-    Code derives rain periods from hourly precipitation probability (50% or
-    more) and forecast precipitation (0.1 mm or more), with the type from the WMO weather
-    code (drizzle, rain, showers, snow, thunderstorms) and the intensity from
-    the peak mm/h on the Met Office bands (light below 0.5, moderate up to 4,
-    heavy above). Times are supplied as "15:00 (3pm)" and the model writes
-    each in one form. The paragraph is rejected unless the high and low each
-    follow a matching role word ("a high of", "down to" ...), each rain
-    period's start appears, no time appears in both forms, there is no "no
-    rain"/"dry all day" claim on a wet day, and every number appears in the
-    block with the same unit (°C, %, am/pm, mm ...). If it fails twice, a code-built paragraph is shown.
+    current-year projection for IMF facts), and a URL matching a page the
+    search tool returned on an allowed domain, rendered as the tool's own
+    URL and attributed to its publisher by host (never by model text). A
+    failed country shows "not available today"; figures it supplies carry a
+    visible note that an AI (LLM) web search found them.
+  - Call E writes a short morning weather line (one to three sentences, at
+    most 60 words), such as "Mostly cloudy and mild, with light rain during
+    the afternoon. A high of 18°C.", from a code-built block. Code supplies
+    the daytime sky (07:00-19:00 weather codes: mostly sunny, sunny spells,
+    mostly cloudy or grey), how the high feels (cold to hot), and the rain
+    spells: runs of hours with a precipitation probability of 50% or more
+    or 0.1 mm or more, never bridged across dry hours, each with its type
+    (WMO code), intensity (peak mm/h on the Met Office bands: light below
+    0.5, moderate up to 4, heavy above), London parts of the day ("on and
+    off" when a part has two spells) and likelihood ("likely" with an hour
+    at 70% or measurable rain at 50%, otherwise "possible"). The line is
+    rejected unless the high is labelled as the high and every number
+    appears in the block with the same unit; on a wet day it must mention
+    the rain, make no whole-day dry claim ("dry this morning" is fine), not
+    deny rain without naming a part of the day, say "heavy" or thunder when
+    those apply, and, when every spell is only possible, hedge in each
+    sentence that mentions rain; on a dry day it must say dry or unlikely,
+    and any rain it mentions must be negated or hedged in that sentence.
+    These are per-sentence heuristics. If it fails twice, a code-built line in
+    the same shape is shown.
   - Call F checks Thameslink. No keyless API lists planned National Rail
     engineering works (TfL's `thameslink` line shows Good Service for every
     future date, and the Rail Data Marketplace needs a registered key), so
