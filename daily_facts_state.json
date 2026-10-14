@@ -146,6 +146,36 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-10-15": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "The SDK supports multi-agent orchestration and handoffs, with the application retaining control over deployment, tools, and storage.",
+          "url": "https://developers.openai.com/api/docs/guides/agents/sdk"
+        },
+        {
+          "model_attribution": "Traces record agent steps, tool calls, inputs, outputs, duration, and status for inspection.",
+          "url": "https://developers.openai.com/api/docs/guides/agents-api/tracing"
+        }
+      ],
+      "ai_theme": "Frameworks and patterns",
+      "ai_topic": "Agent Handoffs as Control Flow",
+      "at": "2026-10-14T06:46:05+00:00",
+      "country": "TLS",
+      "indicators": {
+        "JM": "NV.AGR.TOTL.ZS",
+        "UK": "FP.CPI.TOTL.ZG"
+      },
+      "research_title": "Transistor",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
