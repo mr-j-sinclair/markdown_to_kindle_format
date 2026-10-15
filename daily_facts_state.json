@@ -176,6 +176,57 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-10-16": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "OpenAI recommends clear questions and expected results for independent subtasks, and keeping short or dependent steps in the main agent.",
+          "url": "https://developers.openai.com/api/docs/guides/agents-api/multi-agent"
+        }
+      ],
+      "ai_theme": "Multi-agent systems and orchestration",
+      "ai_topic": "Delegation Contracts for Subagents",
+      "at": "2026-10-15T06:32:51+00:00",
+      "country": "STP",
+      "country_fact": "hdi",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "find_in_page": 1,
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The table lists Jamaica with an HDI value of 0.720.",
+          "org": "UNDP",
+          "tier": 1,
+          "unit_note": "Human Development Index score for the whole country, on a 0–1 scale.",
+          "url": "https://hdr.undp.org/system/files/documents/global-report-document/hdr2025overviewen.pdf",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The table lists United Kingdom with an HDI value of 0.946.",
+          "org": "UNDP",
+          "tier": 1,
+          "unit_note": "Human Development Index score for the whole country, on a 0–1 scale.",
+          "url": "https://hdr.undp.org/system/files/documents/global-report-document/hdr2025overviewen.pdf",
+          "via": "search"
+        }
+      },
+      "research_title": "Gutenberg Bible",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "open_page": 1,
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
