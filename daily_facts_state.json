@@ -227,6 +227,56 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-10-17": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "GenAI spans cover logical operations; inputs and outputs should not be captured by default, and external storage with span references is recommended for production cases involving sensitivity or volume.",
+          "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md"
+        },
+        {
+          "model_attribution": "Semantic conventions provide shared names for operations and data across codebases, libraries and platforms.",
+          "url": "https://opentelemetry.io/docs/concepts/semantic-conventions/"
+        }
+      ],
+      "ai_theme": "Observability and tracing",
+      "ai_topic": "Content-Linked GenAI Traces",
+      "at": "2026-10-16T06:28:03+00:00",
+      "country": "GTM",
+      "country_fact": "unemployment",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/LUR@WEO/GBR/JAM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/LUR@WEO/GBR/JAM",
+          "via": "api"
+        }
+      },
+      "research_title": "Fourier transform",
+      "reviewer_disagreements": [
+        {
+          "note": "Fourier is credited with developing Fourier series and using them in heat theory; saying he introduced sine and cosine transforms may misstate the history.",
+          "section": "research",
+          "url": "https://mathshistory.st-andrews.ac.uk/Biographies/Fourier/"
+        }
+      ],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
