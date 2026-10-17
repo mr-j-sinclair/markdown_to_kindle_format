@@ -277,6 +277,57 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-10-18": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Bloom’s four-stage pipeline, scenario variation, seed-based reproducibility, example of measuring self-preferential bias, and reported validation against human-labelled scores.",
+          "url": "https://www.anthropic.com/research/bloom?via=topaitool_1s"
+        }
+      ],
+      "ai_theme": "Emerging practices",
+      "ai_topic": "Generated Behavioural Evaluations",
+      "at": "2026-10-17T06:17:09+00:00",
+      "country": "VEN",
+      "country_fact": "statehood",
+      "country_fact_compared": [
+        false,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "On August 6, 1962, Jamaica became an independent nation.",
+          "org": "Jamaica Information Service",
+          "tier": 1,
+          "unit_note": "Year Jamaica became independent.",
+          "url": "https://jis.gov.jm/information/independence/?adtrack=97",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "From 1 May 1707, England and Scotland were united into one kingdom called Great Britain.",
+          "org": "UK Parliament",
+          "tier": 1,
+          "unit_note": "Year England and Scotland united as the Kingdom of Great Britain.",
+          "url": "https://www.parliament.uk/about/living-heritage/evolutionofparliament/legislativescrutiny/act-of-union-1707/overview/the-articles-constitution-and-trade/",
+          "via": "search"
+        }
+      },
+      "research_title": "Infinity",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Venezuela’s currency is listed as the bolívar soberano, a superseded name following the 2021 redenomination."
+      ]
     }
   }
 }
