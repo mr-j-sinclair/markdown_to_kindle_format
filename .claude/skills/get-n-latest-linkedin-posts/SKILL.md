@@ -63,7 +63,7 @@ LinkedIn's relative time ("1d") goes in brackets as in the precedent.
   "Screenshot from a video (not a photograph)". If `readyState` stays 0
   (common in a background tab), move the mouse off the player and zoom-capture
   the poster, saying in the caption that the play overlay shows because the
-  video wouldn't load.
+  video wouldn't load. Then add a transcript summary (see **c2**).
 - Document carousel: use LinkedIn's download if offered; else capture pages
   in order (cap ~20) and state "captured X of Y pages".
 - Multi-image: step "Next" through all images, stopping on the position
@@ -113,6 +113,26 @@ message asking the user to open the main Chrome window; retry about every
 screenshot (one can itself take 30 s); at each missing image's position write
 `> ⚠️ **Image could not be embedded** — <reason>. View it at the source URL above.`
 and list it in the final reply.
+
+**c2. Video transcript summary** (every video; keep the screenshot above).
+LinkedIn's auto-captions are a signed WebVTT URL containing
+`video-auto-caption-webvtt`, fetchable with plain curl (no cookies). Find it
+by curling the permalink with a browser User-Agent into a fresh scratchpad
+dir (public posts: `data-captions-url` on the `<video>`, or JSON-LD
+`caption.contentUrl`; decode `&amp;`), else by searching the open tab's
+`document.documentElement.outerHTML` / `video track[src]` for that string.
+curl the `.vtt`, strip cue numbers/timestamps, and read the text. Don't use
+`yt-dlp` for this: its LinkedIn extractor finds no subtitles (tested
+2026-10-14). Don't use Whisper or any speech-to-text (user's choice).
+Write `### Video transcript summary` right after the video's image: an
+italic line *"Summary written from LinkedIn's auto-generated captions, not
+the speaker's words verbatim."*, then 3–8 bullets stating only what the
+captions say (speakers named only if the post, on-screen text or captions
+name them), plus a caveat bullet for garbled caption text. It's a clearly
+labelled authored note beside the verbatim post, so no `_summary` suffix.
+No captions found → `> No transcript available — the video has no captions.`
+(`yt-dlp` at `~/Library/Python/3.14/bin/yt-dlp` can download a LinkedIn
+video's MP4 if one is ever needed; the EPUB doesn't embed video.)
 
 **d. Linked article.** Check the post text, the link-preview card and the
 author's own top-level comments ("link in comments"); only substantive
@@ -201,4 +221,5 @@ after reloading a *fully* loaded list. Failed → retry the unsave only.
 
 Close every tab you opened. Reply with a table (`# | Item (author — title) |
 EPUB | Captured | Preview | Gmail accepted | Unsaved`), then list problems:
-login/CAPTCHA stops, unembedded images (why), failed sends/unsaves, < N items.
+login/CAPTCHA stops, unembedded images (why), videos with no transcript,
+failed sends/unsaves, < N items.

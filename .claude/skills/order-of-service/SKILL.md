@@ -178,5 +178,10 @@ reading is written:
   - congregational/bold lines are `<strong>` and leader lines are not;
   - notice sub-bullets are nested `<ul><li>`;
   - curly/nested quotes are intact.
-- Reply briefly: the file paths, whether it was sent, the readings used and
-  your confidence in them, and any source typos or structural fixes.
+- After the send succeeds, delete the source `.eml` file(s) the user gave
+  from their Desktop (both the order-of-service and notices emails) per
+  `kindle-doc-prep`'s source-`.eml` cleanup rule; keep them if the send
+  failed.
+- Reply briefly: the file paths, whether it was sent, which `.eml` files
+  were deleted, the readings used and your confidence in them, and any
+  source typos or structural fixes.

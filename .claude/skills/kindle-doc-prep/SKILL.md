@@ -95,9 +95,15 @@ nested bullet. Other label-plus-explanation forms must be split by hand:
   screenshot. If neither works, place an explicit image-unavailable notice
   at the original position; never silently omit an image except for the
   email-chrome exclusions below.
-- For video, embed a representative fully loaded frame, avoiding
-  spinners/play overlays where possible, and label it explicitly as a
-  screenshot from a video, not a photograph.
+- Prefer the source's own image file over any screenshot. Find it in the page
+  HTML (`img` `src`/`srcset`, `<video poster>`, `og:image`), then download the
+  largest variant: the biggest `srcset` entry, or raise a CDN resize parameter
+  (e.g. ImageKit `tr:q-65,w-800` → `tr:q-90,w-1400`). Embed the downloaded
+  file as-is; never re-screenshot or re-encode it.
+- For video, first use the publisher's poster/thumbnail artwork as above,
+  captioned as the video's poster image. Only if none exists, embed a
+  representative fully loaded frame, avoiding spinners/play overlays, labelled
+  explicitly as a screenshot from a video, not a photograph.
 
 ## Linked social posts and articles
 
@@ -169,6 +175,13 @@ with best-effort text and link extraction under the same rules below.
   personalised URLs); boilerplate legal, confidentiality, or virus notices;
   VAT numbers. Preserve everything else that's human-written or potentially
   actionable.
+- Source `.eml` cleanup: when the user supplied the `.eml` file(s) from
+  their Desktop (`~/Desktop`) to send to Kindle, delete those exact files
+  with `rm` once the Kindle send has **succeeded** (the converter reports
+  the email was sent). Keep them if the send failed or was suppressed, if
+  only a PDF was produced (never auto-sent), or if anything still needs
+  re-reading. Extract attachments to the scratchpad first; never delete
+  other Desktop files. Say in the reply which files were deleted.
 
 ## Export timestamps
 
