@@ -371,6 +371,56 @@
         "Windrush notices are for Sunday 18 October, the day before this digest, and may no longer be relevant.",
         "Micronesia’s land area is listed as 701 km² in the table but about 702 km² in the prose."
       ]
+    },
+    "2026-10-20": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines selective friction as presenting high-uncertainty predictions with salient warnings, contrasts it with abstention, and examines potential unequal effects.",
+          "url": "https://proceedings.mlr.press/v350/sargeant26a.html"
+        },
+        {
+          "model_attribution": "Reports that how a selective-prediction system communicates deferral can affect human judgement.",
+          "url": "https://ojs.aaai.org/index.php/AAAI/article/view/20465"
+        }
+      ],
+      "ai_theme": "Human-in-the-loop systems",
+      "ai_topic": "Selective Friction for Human Review",
+      "at": "2026-10-19T06:58:21+00:00",
+      "country": "BFA",
+      "country_fact": "fertility",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/SP.DYN.TFRT.IN?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/SP.DYN.TFRT.IN?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Golden ratio",
+      "reviewer_disagreements": [
+        {
+          "note": "The notice appears to conflate routes: Thameslink trains use St Pancras, not London Kings Cross, and the Alexandra Palace–Stevenage closure primarily concerns Great Northern services.",
+          "section": "trains",
+          "url": "https://www.thameslinkrailway.com/service-updates/service-updates?uq=639139680000660000"
+        }
+      ],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
