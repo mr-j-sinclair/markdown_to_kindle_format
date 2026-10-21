@@ -465,6 +465,61 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-10-22": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Explains completion evaluators, configurable maximum iterations, and why autonomous loops should always be bounded.",
+          "url": "https://learn.microsoft.com/en-us/agent-framework/agents/looping"
+        }
+      ],
+      "ai_theme": "Agentic loops and planning",
+      "ai_topic": "Two Layers of Agent Stopping",
+      "at": "2026-10-21T06:39:02+00:00",
+      "country": "NPL",
+      "country_fact": "homicide",
+      "country_fact_compared": [
+        false,
+        "a figure comes from a different source, so definitions may differ"
+      ],
+      "country_fact_search_actions": {
+        "search": 4
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The table lists Jamaica’s intentional homicide rate as 53.3 per 100,000 population in 2022.",
+          "org": "UNODC",
+          "tier": 1,
+          "unit_note": "Intentional homicide rate for Jamaica per 100,000 population.",
+          "url": "https://www.unodc.org/documents/data-and-analysis/gsh/2023/Global_study_on_homicide_2023_web.pdf",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The page lists the United Kingdom at 1.12 for 2021; the indicator is intentional homicides per 100,000 people.",
+          "org": "World Bank",
+          "tier": 2,
+          "unit_note": "Intentional homicides per 100,000 people, whole UK.",
+          "url": "https://data.worldbank.org/indicator/VC.IHR.PSRC.P5?locations=null",
+          "via": "search"
+        }
+      },
+      "research_title": "Creative destruction",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": [
+        "UK–Jamaica diagnostics report that the writer failed twice; the homicide figures are from 2021 and 2022, respectively.",
+        "The homicide section says the figures are not compared because sources may differ, but then presents them together in the fact paragraph.",
+        "UK vs Jamaica: Jamaica's latest 'Intentional homicide rate' figure is from 2022.",
+        "UK vs Jamaica: UK's latest 'Intentional homicide rate' figure is from 2021.",
+        "UK vs Jamaica writer failed twice (fact paragraph gives a cause)."
+      ]
     }
   }
 }
