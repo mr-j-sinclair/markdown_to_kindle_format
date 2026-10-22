@@ -520,6 +520,48 @@
         "UK vs Jamaica: UK's latest 'Intentional homicide rate' figure is from 2021.",
         "UK vs Jamaica writer failed twice (fact paragraph gives a cause)."
       ]
+    },
+    "2026-10-23": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Explains how chunk-specific context is prepended before embedding and BM25 indexing, gives the ACME SEC-filing example, and reports retrieval-failure results.",
+          "url": "https://www.anthropic.com/research/contextual-retrieval"
+        }
+      ],
+      "ai_theme": "Retrieval and RAG",
+      "ai_topic": "Contextual Retrieval for RAG",
+      "at": "2026-10-22T06:39:46+00:00",
+      "country": "ZAF",
+      "country_fact": "remittances",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/BX.TRF.PWKR.DT.GD.ZS?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/BX.TRF.PWKR.DT.GD.ZS?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Permafrost",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
