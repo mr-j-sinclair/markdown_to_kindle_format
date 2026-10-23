@@ -562,6 +562,61 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-10-24": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Describes the post-response safety assessment, its structured fields, reuse of the conversation context, and use as a passive monitor for further review; also details its limitations as a blocker.",
+          "url": "https://safeguards.anthropic.com/2026/self-assessment/"
+        }
+      ],
+      "ai_theme": "Guardrails and safety",
+      "ai_topic": "Self-Assessment as a Safety Monitor",
+      "at": "2026-10-23T06:34:56+00:00",
+      "country": "BEL",
+      "country_fact": "homelessness",
+      "country_fact_compared": [
+        false,
+        "the two countries define and count homelessness differently"
+      ],
+      "country_fact_search_actions": {
+        "search": 2
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "A national survey completed in the last quarter of 2025 found approximately 2,261 homeless people in Jamaica.",
+          "org": "Jamaica Information Service",
+          "tier": 1,
+          "unit_note": "People counted as homeless in Jamaica’s national survey in the last quarter of 2025.",
+          "url": "https://jis.gov.jm/35-million-marie-atkins-night-shelter-renovation-as-govt-bolsters-services-for-the-homeless/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The release reports 134,210 households in temporary accommodation on 31 December 2025.",
+          "org": "UK Government",
+          "tier": 1,
+          "unit_note": "Households in temporary accommodation in England on 31 December 2025.",
+          "url": "https://www.gov.uk/government/statistics/statutory-homelessness-in-england-october-to-december-2025/statutory-homelessness-in-england-october-to-december-2025",
+          "via": "search"
+        }
+      },
+      "research_title": "World Wide Web",
+      "reviewer_disagreements": [
+        {
+          "note": "The Web was publicly available by 1991; 1993 was when CERN released the Web software into the public domain.",
+          "section": "research",
+          "url": "https://home.cern/science/computing/the-birth-of-the-web/short-history-web/"
+        }
+      ],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
