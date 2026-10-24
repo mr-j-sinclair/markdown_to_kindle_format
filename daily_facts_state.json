@@ -617,6 +617,51 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-10-25": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "The RouteLLM paper describes learning routers from preference data to choose between stronger and weaker LLMs at inference time.",
+          "url": "https://arxiv.org/abs/2406.18665"
+        }
+      ],
+      "ai_theme": "Model routing and cost",
+      "ai_topic": "Preference-Trained Model Routing",
+      "at": "2026-10-24T06:32:52+00:00",
+      "country": "FIN",
+      "country_fact": "life-expectancy",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/life-expectancy-at-birth-(years)",
+          "via": "api"
+        },
+        "UK": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/life-expectancy-at-birth-(years)",
+          "via": "api"
+        }
+      },
+      "research_title": "Network effect",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "open_page": 1,
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Weather timing is contradictory: rain is described as occurring early in the morning but clearing by 1am.",
+        "Population unavailable (World Bank SP.POP.TOTL: HTTPError 502).",
+        "Land area unavailable (World Bank AG.LND.TOTL.K2: HTTPError 502)."
+      ]
     }
   }
 }
