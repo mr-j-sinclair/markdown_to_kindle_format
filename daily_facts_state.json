@@ -708,6 +708,68 @@
       "warnings": [
         "The Croydon weather is presented as an Open-Meteo forecast for October 2026, far beyond the forecast horizon; these figures cannot be a valid forecast."
       ]
+    },
+    "2026-10-27": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 2
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Describes REFLEX, which uses Jev as a fast, typed decision layer and calls a strong LLM when confidence is low or generation is required.",
+          "url": "https://arxiv.org/abs/2609.26532"
+        },
+        {
+          "model_attribution": "Describes Jev inputs and decision use cases, including choice for classification, routing, intent detection, and selecting the next workflow.",
+          "url": "https://github.com/jev-ai/jev-ai-llm"
+        },
+        {
+          "model_attribution": "Frames Jev as a typed classifier that returns probabilities over permitted answers rather than generating text.",
+          "url": "https://arxiv.org/abs/2609.29769"
+        }
+      ],
+      "ai_theme": "Tool use and structured outputs",
+      "ai_topic": "Typed Decision Models in Agent Loops",
+      "at": "2026-10-26T08:10:36+00:00",
+      "country": "SVN",
+      "country_fact": "prison-rate",
+      "country_fact_compared": [
+        false,
+        "the UK figure covers England and Wales only"
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The page states a prison population rate of 124 per 100,000, based on the estimated population at the end of December 2023.",
+          "org": "World Prison Brief",
+          "tier": 1,
+          "unit_note": "Prisoners, including pre-trial and remand detainees, per 100,000 people in Jamaica.",
+          "url": "https://prisonstudies.org/country/jamaica",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The page states a prison population rate of 140 per 100,000, based on the estimated population at the end of September 2026.",
+          "org": "World Prison Brief",
+          "tier": 1,
+          "unit_note": "Prisoners, including pre-trial and remand detainees, per 100,000 people in England and Wales.",
+          "url": "https://prisonstudies.org/country/united-kingdom-england-wales",
+          "via": "search"
+        }
+      },
+      "research_title": "Adverse selection",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": [
+        "Jamaica’s prison population rate is dated 2023, so the comparison uses a figure three years older than the UK figure.",
+        "The UK vs Jamaica writer failed twice, as noted in diagnostics.",
+        "UK vs Jamaica: Jamaica's latest 'Prison population rate (UK: England and Wales)' figure is from 2023.",
+        "UK vs Jamaica writer failed twice (fact paragraph gives a cause)."
+      ]
     }
   }
 }
