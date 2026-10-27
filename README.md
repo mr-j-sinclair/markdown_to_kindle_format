@@ -368,7 +368,8 @@ missed date locally with `--date`.
 Under the title is a date line ("Today is Tuesday 13th October 2026."). It
 has six sections: Weather in Croydon, Trains, Flag of the Day, Research
 Fact, AI Engineering topic, and UK vs Jamaica (one fact a day, for both
-countries). It is separate
+countries). On Sundays the AI Engineering topic is replaced by a
+[Sunday Reading](#sunday-reading-added-2026-10-27). It is separate
 from the NTIY automation: its own workflow, concurrency group and state
 branch.
 
@@ -574,6 +575,35 @@ cron 02:50 (+ backups 04:50 .. 17:50; no-op once sent)
 ```bash
 OPENAI_API_KEY="$(security find-generic-password -s openai-api-key -w)" DAILY_FACTS_LIVE=1 .venv/bin/python3 -m unittest tests.test_daily_facts_live -v
 ```
+
+### Sunday Reading (added 2026-10-27)
+
+From Sunday 1 November 2026, Sunday documents replace the AI Engineering
+section with a **Sunday Reading**; every other day and every other section
+is unchanged, and call B is not made on Sundays.
+
+- **Text:** Sirach, then the Wisdom of Solomon, from the
+  [World English Bible](https://ebible.org/web/) (public domain), committed
+  in `daily_facts_data/sunday_reading.json` with its provenance (download
+  URL, retrieval date, zip SHA-256). Footnotes, cross references and stanza
+  breaks are dropped, and verses the WEB marks as omitted by the best
+  authorities (footnote only) are skipped; otherwise the text is verbatim
+  and is never written or shortened by a model.
+- **Schedule:** pure calendar arithmetic from the file's `start` date: per
+  book an overview Sunday, then two chapters a Sunday (51 chapters of
+  Sirach over 26 Sundays, 19 of Wisdom over 10), 38 weeks in all, then it
+  restarts with Sirach. A missed Sunday is skipped, not shifted.
+- **Overview Sunday:** who wrote the book and what it is about (call S1,
+  restating the book's Wikipedia lead, no tools), a code-built Mermaid
+  diagram of the authored chapter outline, the reading plan (dates and
+  minutes a week from the committed word counts) and, for Sirach, the
+  translator's Prologue.
+- **Every Sunday:** "Look back" names last week's scheduled reading and,
+  after a chapter week, a 60-100 word recap (call S2, grounded only in that
+  week's committed chapter text, no tools); "Look forward" names next
+  week's chapters and their part of the outline. A failed S1 or S2 call
+  leaves the scripture, diagram and plan in place.
+- The workflow installs Graphviz so the diagram renders as an image.
 
 ## Mermaid diagrams
 

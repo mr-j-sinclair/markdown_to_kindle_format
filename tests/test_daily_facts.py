@@ -186,6 +186,9 @@ GOOD_B = {"topic_title": "Context rot", "concept": "Long contexts degrade recall
 GOOD_C = {"status": "ok", "notes": [], "source_disagreements": []}
 GOOD_E = {"paragraph": "A grey day with light showers from 1pm until 4pm, so take an umbrella for the "
                        "afternoon. Expect a high of 20°C and a low of 13°C."}
+GOOD_S1 = {"authorship": "Ben Sira, a Jewish scribe, wrote it in Hebrew; his grandson translated it.",
+           "about": "Ethical teachings on wisdom and the fear of God."}
+GOOD_S2 = {"summary": "The chapters praise wisdom and the fear of the Lord."}
 RAIL_URL = "https://www.thameslinkrailway.com/travel-information/engineering-works"
 GOOD_F = {"status": "none_found", "summary": "", "sources": []}
 DISRUPTION_F = {"status": "disruption",
@@ -277,7 +280,10 @@ def good_client():
                        "country_fact": [echo_fact],
                        # Call G only runs when an API lacks a figure; by default it finds nothing.
                        "country_fact_search": [response({"countries": []}, tool_calls=[search_call(WB_PAGE)])],
-                       "thameslink": [response(GOOD_F, tool_calls=[search_call(RAIL_URL)])]})
+                       "thameslink": [response(GOOD_F, tool_calls=[search_call(RAIL_URL)])],
+                       # Sundays only: the Sunday Reading's calls S1 and S2.
+                       "book_overview": [response(GOOD_S1, tool_calls=[])],
+                       "look_back": [response(GOOD_S2, tool_calls=[])]})
 
 
 class Base(unittest.TestCase):
@@ -2333,6 +2339,207 @@ class MainTests(Base):
         self.assertIn("- Reranking", ai_req["input"])
 
 
+# ---------- Sunday Reading ----------
+
+def sunday(text):
+    return datetime.date.fromisoformat(text)
+
+
+class SundayReadingTests(Base):
+    def reading(self, date):
+        return df.sunday_reading(sunday(date), self.data["sunday"])
+
+    def titles(self, date):
+        r = self.reading(date)
+        return (df.reading_title(r["current"]), r["previous"] and df.reading_title(r["previous"]),
+                df.reading_title(r["next"]))
+
+    def build(self, date, client=None):
+        client = client or good_client()
+        sel = df.select(sunday(date), self.data)
+        sel.country = next(c for c in self.data["countries"] if c["cca3"] == "JAM")
+        sel.country_fact = self.fact("internet")
+        with contextlib.redirect_stderr(io.StringIO()):
+            sel, facts = self.gather(sel=sel, client=client)
+            markdown, warnings, _ = df.build_document(sel, facts, client=client)
+        return sel, facts, markdown, warnings, client
+
+    def calls(self, client):
+        return [r["text"]["format"]["name"] for r in client.requests]
+
+    def test_schedule(self):
+        for date, titles in (
+                ("2026-11-01", ("Sirach overview", None, "Sirach 1–2")),
+                ("2026-11-08", ("Sirach 1–2", "Sirach overview", "Sirach 3–4")),
+                ("2026-11-15", ("Sirach 3–4", "Sirach 1–2", "Sirach 5–6")),
+                ("2027-05-02", ("Sirach 51", "Sirach 49–50", "Wisdom of Solomon overview")),
+                ("2027-05-09", ("Wisdom of Solomon overview", "Sirach 51", "Wisdom of Solomon 1–2")),
+                ("2027-07-11", ("Wisdom of Solomon 17–18", "Wisdom of Solomon 15–16", "Wisdom of Solomon 19")),
+                ("2027-07-18", ("Wisdom of Solomon 19", "Wisdom of Solomon 17–18", "Sirach overview")),
+                # Week 38 restarts the plan, and its overview looks back on Wisdom 19.
+                ("2027-07-25", ("Sirach overview", "Wisdom of Solomon 19", "Sirach 1–2"))):
+            self.assertEqual(self.titles(date), titles, date)
+        self.assertEqual(len(df.sunday_plan(self.data["sunday"])), 38)
+        self.assertEqual(self.reading("2027-07-25")["week"], 0)
+
+    def test_only_sundays_from_the_start(self):
+        for date in ("2026-10-31", "2026-11-07", "2026-11-02", "2026-10-25"):  # Saturdays, a Monday, pre-start
+            self.assertIsNone(self.reading(date), date)
+            self.assertIsNone(df.select(sunday(date), self.data).sunday)
+
+    def test_data_is_complete_and_clean(self):
+        data = self.data["sunday"]
+        self.assertEqual(sunday(data["start"]).weekday(), 6)
+        self.assertEqual(data["source"]["licence"], "Public Domain")
+        self.assertRegex(data["source"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual([(b["name"], len(b["chapters"])) for b in data["books"]],
+                         [("Sirach", 51), ("Wisdom of Solomon", 19)])
+        for book in data["books"]:
+            covered = [n for part in book["outline"] for n in range(part["first"], part["last"] + 1)]
+            self.assertEqual(covered, list(range(1, len(book["chapters"]) + 1)), book["name"])
+            self.assertTrue(book["outline_source"].startswith("https://en.wikipedia.org/wiki/"))
+            for number, chapter in enumerate(book["chapters"], 1):
+                self.assertTrue(chapter, (book["name"], number))
+                for verse in chapter:
+                    self.assertRegex(verse["v"], r"^\d+$")
+                    self.assertTrue(verse["lines"])
+                    for line in verse["lines"]:
+                        self.assertTrue(line and line == line.strip(), (book["name"], number, verse["v"]))
+                        # No USFM or Markdown markup survives into the text.
+                        self.assertNotRegex(line, r"[\\*_\[\]<>`$#|]", (book["name"], number, verse["v"]))
+            # Footnote-only verses are listed as omitted, never also present.
+            for number, verses in book["omitted"].items():
+                present = {v["v"] for v in book["chapters"][int(number) - 1]}
+                for v in verses:
+                    first, _, last = v.partition("-")
+                    self.assertFalse({str(n) for n in range(int(first), int(last or first) + 1)} & present, v)
+        self.assertIn("5", data["books"][0]["omitted"]["1"])
+        self.assertTrue(data["books"][0]["prologue"].startswith("WHEREAS many and great things"))
+
+    def test_chapter_sunday_replaces_ai_engineering(self):
+        sel, facts, markdown, warnings, client = self.build("2026-11-15")
+        self.assertEqual([w for w in warnings if "Sunday" in w], [])
+        self.assertNotIn("ai_lesson", self.calls(client))
+        self.assertNotIn("book_overview", self.calls(client))
+        self.assertNotIn("AI Engineering", markdown)
+        self.assertIsNone(facts.ai)
+        section = markdown.split("## Sunday Reading: Sirach 3–4\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("*World English Bible (public domain)*", section)
+        self.assertIn("### Look back\n\nLast week: Sirach 1–2.\n\n" + GOOD_S2["summary"], section)
+        # Verse text verbatim, its poetry lines joined by hard line breaks.
+        self.assertIn("### Sirach 3\n\n**1** Hear me, your father, O my children,  \n"
+                      "and do what you hear, that you all may be safe.\n", section)
+        self.assertIn("### Sirach 4\n", section)
+        # A numbering gap is explained under its chapter.
+        self.assertIn("\n\n*Verse 19 is left out of this translation: the best manuscripts do not have it.*\n\n"
+                      "### Sirach 4\n", section)
+        self.assertLess(section.index("### Look back"), section.index("### Sirach 3"))
+        self.assertIn("### Look forward\n\nNext week: Sirach 5–6 (part of: Teaching for daily life).", section)
+        self.assertIn("Source: [World English Bible — eBible.org](https://ebible.org/web/)", section)
+        # The other sections are all still there, in order, and every link is code-owned.
+        for before, after in (("## Weather in Croydon", "## Trains"), ("## Research Fact", "## Sunday Reading"),
+                              ("## Sunday Reading", "## UK vs Jamaica")):
+            self.assertLess(markdown.index(before), markdown.index(after))
+        self.assertEqual(set(df.rendered_links(df.converter_view(markdown)[0])), df.allowed_links(sel, facts))
+        self.assertIn("<br", str(df.converter_view(section)[0]))
+
+    def test_look_back_is_grounded_in_the_previous_book(self):
+        _, _, markdown, _, client = self.build("2027-05-09")   # Wisdom overview looks back on Sirach 51
+        request = next(r for r in client.requests if r["text"]["format"]["name"] == "look_back")
+        self.assertNotIn("tools", request)
+        self.assertTrue(request["input"].startswith("READING: Sirach 51\n\nCHAPTER 51\n"
+                                                    "1 I will give thanks to you, O Lord, O King, and will "
+                                                    "praise you, O God my Savior. I give thanks to your name,"))
+        self.assertNotIn("CHAPTER 50", request["input"])
+        self.assertIn("Last week: Sirach 51.", markdown)
+        self.assertIn("Next week: Wisdom of Solomon 1–2 (part of: Exhortation to justice; The wicked and the just).", markdown)
+
+    def test_omitted_verse_notes(self):
+        book = self.data["sunday"]["books"][0]
+        self.assertTrue(df._chapter_text(book, 1).endswith(
+            "\n\n*Verses 5, 7 and 21 are left out of this translation: the best manuscripts do not have them.*"))
+        self.assertIn("*Verses 19–27 are left out", df._chapter_text(book, 26))
+        self.assertNotIn("left out", df._chapter_text(book, 2))
+
+    def test_overview_sunday(self):
+        sel, facts, markdown, warnings, client = self.build("2026-11-01")
+        self.assertEqual([w for w in warnings if "Sunday" in w], [])
+        self.assertEqual(self.calls(client).count("book_overview"), 1)
+        self.assertNotIn("look_back", self.calls(client))   # the first Sunday has nothing to look back on
+        overview = next(r for r in client.requests if r["text"]["format"]["name"] == "book_overview")
+        self.assertNotIn("tools", overview)
+        self.assertIn("BOOK: Sirach\nSOURCE:\nSome encyclopedic text.", overview["input"])
+        section = markdown.split("## Sunday Reading: Sirach overview\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(f"### Who wrote it\n\n{GOOD_S1['authorship']}", section)
+        self.assertIn(f"### What it's about\n\n{GOOD_S1['about']}", section)
+        self.assertIn('```mermaid\nflowchart TD\n    s0["1–2: Wisdom and the fear of the Lord"]\n', section)
+        self.assertIn("    s5 --> s6\n```", section)
+        self.assertIn("- 51 chapters over 26 Sundays, two chapters a week, from Sunday 8 November 2026 to "
+                      "Sunday 2 May 2027.", section)
+        self.assertRegex(section, r"- About \d+–\d+ minutes a week \(26,\d{3} words in all")
+        self.assertIn("### The Prologue\n\nWHEREAS many", section)
+        self.assertIn("### Look back\n\nThis is the first Sunday reading.", section)
+        self.assertIn("Next week: Sirach 1–2 (part of: Wisdom and the fear of the Lord).", section)
+        self.assertIn("Sources: [World English Bible — eBible.org](https://ebible.org/web/) · "
+                      "[Book_of_Sirach — Wikipedia](https://en.wikipedia.org/wiki/Book_of_Sirach)", section)
+        self.assertNotIn("### Sirach 1\n", section)
+        self.assertEqual(set(df.rendered_links(df.converter_view(markdown)[0])), df.allowed_links(sel, facts))
+
+    def test_second_book_overview_has_no_prologue(self):
+        _, _, markdown, _, _ = self.build("2027-05-09")
+        self.assertIn("- 19 chapters over 10 Sundays, two chapters a week, from Sunday 16 May 2027 to "
+                      "Sunday 18 July 2027.", markdown)
+        self.assertNotIn("### The Prologue", markdown)
+
+    def test_model_failures_leave_the_scripture(self):
+        client = good_client()
+        client.answers["look_back"] = [df.LLMError("bad")]
+        _, _, markdown, warnings, _ = self.build("2026-11-15", client)
+        self.assertIn("Last week: Sirach 1–2.\n\n### Sirach 3", markdown)
+        self.assertIn("**1** Hear me, your father", markdown)
+        self.assertTrue(any("call S2" in w for w in warnings))
+
+        client = good_client()
+        client.answers["book_overview"] = [RuntimeError("down")]
+        _, _, markdown, warnings, _ = self.build("2026-11-01", client)
+        self.assertIn("*Unavailable today: the overview of Sirach.", markdown)
+        for kept in ("### Structure", "```mermaid", "### Reading plan", "### The Prologue", "### Look forward"):
+            self.assertIn(kept, markdown)
+        self.assertTrue(any("call S1" in w for w in warnings))
+
+    def test_wikipedia_failure_skips_s1(self):
+        routes = default_routes()
+        routes = {"Book_of_Sirach": TimeoutError(), **routes}
+        client = good_client()
+        sel = df.select(sunday("2026-11-01"), self.data)
+        with contextlib.redirect_stderr(io.StringIO()):
+            sel, facts = self.gather(routes=routes, sel=sel, client=client)
+            markdown, warnings, _ = df.build_document(sel, facts, client=client)
+        self.assertNotIn("book_overview", self.calls(client))
+        self.assertIn("*Unavailable today: the overview of Sirach.", markdown)
+        self.assertIn("Source: [World English Bible — eBible.org]", markdown)
+        self.assertTrue(any("Sunday Reading overview source" in w for w in warnings))
+
+    def test_disagreement_about_an_absent_section_is_dropped(self):
+        client = with_disagreements(good_client(), ("ai", "The AI topic is wrong."))
+        _, _, markdown, _, _ = self.build("2026-11-15", client)
+        self.assertNotIn("AI reviewer note", markdown)
+
+    def test_state_records_the_reading(self):
+        state_path = os.path.join(self.tmp, "state.json")
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), contextlib.redirect_stderr(io.StringIO()), \
+                patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+            df.main(["--date", "2026-11-15", "--state", state_path], client=good_client())
+            df.main(["--date", "2026-11-14", "--state", state_path], client=good_client())
+        sent = df.load_state(state_path)["sent"]
+        self.assertEqual(sent["2026-11-15"]["sunday_reading"], "Sirach 3–4")
+        self.assertIsNone(sent["2026-11-15"]["ai_theme"])
+        self.assertIsNone(sent["2026-11-15"]["ai_topic"])
+        # The Saturday before is an ordinary AI Engineering day.
+        self.assertIsNone(sent["2026-11-14"]["sunday_reading"])
+        self.assertEqual(sent["2026-11-14"]["ai_topic"], "Context rot")
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         workflow = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -2351,6 +2558,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_workflow_success_code_matches_already_sent_constant(self):
         self.assertIn(f'"$rc" -eq {df.EXIT_ALREADY_SENT} ]', self.text)
+
+    def test_graphviz_installed_for_the_sunday_diagram(self):
+        self.assertIn("apt-get install -y -q graphviz", self.text)
 
 
 if __name__ == "__main__":
