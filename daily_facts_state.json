@@ -770,6 +770,51 @@
         "UK vs Jamaica: Jamaica's latest 'Prison population rate (UK: England and Wales)' figure is from 2023.",
         "UK vs Jamaica writer failed twice (fact paragraph gives a cause)."
       ]
+    },
+    "2026-10-28": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines parallel workflows as simultaneous independent tasks whose outputs may be merged, and describes when to use or avoid them.",
+          "url": "https://resources.anthropic.com/hubfs/Building%20Effective%20AI%20Agents-%20Architecture%20Patterns%20and%20Implementation%20Frameworks.pdf?hsLang=en"
+        },
+        {
+          "model_attribution": "Explains the manager-style pattern where a primary agent calls bounded specialists and remains responsible for synthesising the final answer.",
+          "url": "https://developers.openai.com/api/docs/guides/agents/orchestration"
+        }
+      ],
+      "ai_theme": "Frameworks and patterns",
+      "ai_topic": "Fan-Out, Fan-In Workflows",
+      "at": "2026-10-27T08:25:41+00:00",
+      "country": "UKR",
+      "country_fact": "gov-debt",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/GBR/JAM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/GBR/JAM",
+          "via": "api"
+        }
+      },
+      "research_title": "Halting problem",
+      "reviewer_disagreements": [],
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
