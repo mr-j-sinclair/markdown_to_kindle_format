@@ -815,6 +815,48 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-10-29": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Describes MemCurrent’s episodic and derived memories, search and fetch tools, background “dreaming” consolidation, and immediate handling of explicit requests.",
+          "url": "https://www.databricks.com/blog/memcurrent-designing-persistent-memory-production-agents"
+        },
+        {
+          "model_attribution": "Describes the production memory architecture’s plugins, on-demand tools, and background consolidation pipeline.",
+          "url": "https://www.databricks.com/blog/introducing-agent-memory-databricks"
+        }
+      ],
+      "ai_theme": "AI memory and agent state",
+      "ai_topic": "Background Memory Consolidation",
+      "at": "2026-10-28T09:02:55+00:00",
+      "country": "USA",
+      "country_fact": "doctors",
+      "country_fact_compared": [
+        false,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 2
+      },
+      "country_fact_sources": {},
+      "research_title": "Central limit theorem",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Thameslink does not serve Gravesend or Gillingham; the notice appears to describe another rail operator.",
+        "The UK–Jamaica comparison is unavailable: the WHO API failed, and web searches found neither country's figure.",
+        "UK vs Jamaica: WHO API unavailable (WHO HWF_0001: HTTPError 500); tried a web search instead.",
+        "UK vs Jamaica: UK's figure not available today (web search: not found).",
+        "UK vs Jamaica: Jamaica's figure not available today (web search: not found)."
+      ]
     }
   }
 }
