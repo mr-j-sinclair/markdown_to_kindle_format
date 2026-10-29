@@ -857,6 +857,60 @@
         "UK vs Jamaica: UK's figure not available today (web search: not found).",
         "UK vs Jamaica: Jamaica's figure not available today (web search: not found)."
       ]
+    },
+    "2026-10-30": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "The September 2026 JAM paper describes a Memorizer that organises raw histories in a hierarchical workspace and a Researcher that retrieves, inspects and integrates evidence at query time; it reports benchmark comparisons and a quality–latency trade-off.",
+          "url": "https://arxiv.org/abs/2609.34385"
+        }
+      ],
+      "ai_theme": "Emerging practices",
+      "ai_topic": "Runtime Agentic Memory Research",
+      "at": "2026-10-29T08:59:16+00:00",
+      "country": "ZWE",
+      "country_fact": "women-in-parliament",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The page reports 19 women among 63 current members and a percentage of women of 30.2%.",
+          "org": "Inter-Parliamentary Union",
+          "tier": 1,
+          "unit_note": "Percentage of seats in the House of Representatives held by women.",
+          "url": "https://data.ipu.org/parliament/JM/JM-LC01/data-on-women/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The page reports women’s representation as 41.0%, calculated by dividing the current number of women by current members.",
+          "org": "Inter-Parliamentary Union",
+          "tier": 1,
+          "unit_note": "Percentage of seats in the House of Commons held by women; data updated July 2026.",
+          "url": "https://data.ipu.org/parliament/gb/GB-LC01/data-on-women/",
+          "via": "search"
+        }
+      },
+      "research_title": "Maslow's hierarchy of needs",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "The Windrush notice lists work for 26–29 October, dates that have already passed on this 30 October digest.",
+        "Zimbabwe's currency list appears outdated: it includes Zimbabwean bonds but omits the Zimbabwe Gold (ZiG).",
+        "The Thameslink notice names Gravesend–Gillingham, a route not served by Thameslink; this may be a misattributed disruption."
+      ]
     }
   }
 }
