@@ -911,6 +911,51 @@
         "Zimbabwe's currency list appears outdated: it includes Zimbabwean bonds but omits the Zimbabwe Gold (ZiG).",
         "The Thameslink notice names Gravesend–Gillingham, a route not served by Thameslink; this may be a misattributed disruption."
       ]
+    },
+    "2026-10-31": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "CostRoute proposes predicting output-length distributions per query and provider, combining these with provider costs, and using a cost-quality-efficiency score for routing.",
+          "url": "https://ieeexplore.ieee.org/document/11569559/"
+        },
+        {
+          "model_attribution": "A model router can analyse a prompt and select a model according to configured cost, balanced, or quality routing modes.",
+          "url": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-router-how-it-works"
+        }
+      ],
+      "ai_theme": "Model routing and cost",
+      "ai_topic": "Predict Output Cost Before Routing",
+      "at": "2026-10-30T09:04:27+00:00",
+      "country": "QAT",
+      "country_fact": "inflation",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/PCPIPCH@WEO/GBR/JAM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "IMF World Economic Outlook",
+          "url": "https://www.imf.org/external/datamapper/PCPIPCH@WEO/GBR/JAM",
+          "via": "api"
+        }
+      },
+      "research_title": "Radiocarbon dating",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
