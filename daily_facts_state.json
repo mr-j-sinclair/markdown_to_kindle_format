@@ -956,6 +956,50 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-11-01": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-10-31T08:58:33+00:00",
+      "country": "GBR",
+      "country_fact": "maternal-mortality",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The WHO country page reports a maternal mortality ratio of 130.1 per 100,000 live births for 2023.",
+          "org": "WHO",
+          "tier": 1,
+          "unit_note": "Maternal deaths per 100,000 live births",
+          "url": "https://data.who.int/countries/388",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The WHO country page reports a maternal mortality ratio of 8.31 per 100,000 live births for 2023.",
+          "org": "WHO",
+          "tier": 1,
+          "unit_note": "Maternal deaths per 100,000 live births",
+          "url": "https://data.who.int/countries/826",
+          "via": "search"
+        }
+      },
+      "research_title": "Nuclear fission",
+      "reviewer_disagreements": [],
+      "sunday_reading": "Sirach overview",
+      "thameslink_search_actions": {
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "UK vs Jamaica: WHO API unavailable (WHO MDG_0000000026: HTTPError 500); tried a web search instead."
+      ]
     }
   }
 }
