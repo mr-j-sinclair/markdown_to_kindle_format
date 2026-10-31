@@ -369,7 +369,9 @@ Under the title is a date line ("Today is Tuesday 13th October 2026."). It
 has six sections: Weather in Croydon, Trains, Flag of the Day, Research
 Fact, AI Engineering topic, and UK vs Jamaica (one fact a day, for both
 countries). On Sundays the AI Engineering topic is replaced by a
-[Sunday Reading](#sunday-reading-added-2026-10-27). It is separate
+[Sunday Reading](#sunday-reading-added-2026-10-27), and on study-break days
+the document is cut down to a [break notice](#breaks-added-2026-10-31),
+the weather and the flag. It is separate
 from the NTIY automation: its own workflow, concurrency group and state
 branch.
 
@@ -589,21 +591,40 @@ is unchanged, and call B is not made on Sundays.
   breaks are dropped, and verses the WEB marks as omitted by the best
   authorities (footnote only) are skipped; otherwise the text is verbatim
   and is never written or shortened by a model.
-- **Schedule:** pure calendar arithmetic from the file's `start` date: per
-  book an overview Sunday, then two chapters a Sunday (51 chapters of
-  Sirach over 26 Sundays, 19 of Wisdom over 10), 38 weeks in all, then it
-  restarts with Sirach. A missed Sunday is skipped, not shifted.
+- **Schedule:** pure calendar arithmetic from the file's `start` date over
+  reading Sundays (Sundays that are not [break](#breaks-added-2026-10-31)
+  days): per book an overview Sunday, then two chapters a Sunday (51
+  chapters of Sirach over 26 reading Sundays, 19 of Wisdom over 10), 38 in
+  all, then it restarts with Sirach. A break Sunday pauses the plan, which
+  resumes where it left off; a missed delivery is skipped, not shifted.
 - **Overview Sunday:** who wrote the book and what it is about (call S1,
   restating the book's Wikipedia lead, no tools), a code-built Mermaid
   diagram of the authored chapter outline, the reading plan (dates and
   minutes a week from the committed word counts) and, for Sirach, the
   translator's Prologue.
-- **Every Sunday:** "Look back" names last week's scheduled reading and,
-  after a chapter week, a 60-100 word recap (call S2, grounded only in that
-  week's committed chapter text, no tools); "Look forward" names next
-  week's chapters and their part of the outline. A failed S1 or S2 call
+- **Every Sunday:** "Look back" names the previous scheduled reading and
+  its date and, after a chapter week, a 60-100 word recap (call S2,
+  grounded only in that week's committed chapter text, no tools); "Look
+  forward" names the next reading, its date and its part of the outline. A failed S1 or S2 call
   leaves the scripture, diagram and plan in place.
 - The workflow installs Graphviz so the diagram renders as an image.
+
+### Breaks (added 2026-10-31)
+
+`daily_facts_data/calendar.yaml` lists study breaks in the same shape (and
+with the same breaks) as the ISLP / Udemy course calendars: England bank
+holidays (pinned `holidays` package), Easter (Good Friday to Easter Monday),
+named `blackouts` (Birthday break 9-16 November 2026, Christmas & New Year
+24 December 2026 - 3 January 2027) and ad-hoc `pauses`.
+
+- On a break day the document is still sent, but holds only a stock notice
+  naming the break and the return date ("Back on Tuesday 17 November"),
+  the weather and the Flag of the Day. Trains, Research Fact, AI
+  Engineering, UK vs Jamaica and their fetches and model calls are skipped.
+- Sundays inside a break are break days too: the Sunday Reading pauses
+  and resumes the next reading Sunday.
+- Add or change future dates only: editing a past break re-times every
+  later Sunday Reading.
 
 ## Mermaid diagrams
 

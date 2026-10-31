@@ -20,3 +20,7 @@ openai
 # without it. See the "Mermaid diagram image rendering" section in
 # md_to_kindle.py for the full rollback steps.
 graphviz
+# Daily Facts study breaks (daily_facts_data/calendar.yaml), same pins as ISLP_Kindle_Daily
+PyYAML==6.0.3
+holidays==0.106
+python-dateutil

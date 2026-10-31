@@ -44,10 +44,16 @@ On Sundays from daily_facts_data/sunday_reading.json's start date, a
 "Sunday Reading" replaces the AI Engineering section (and call B is not
 made): Sirach, then the Wisdom of Solomon, from the public-domain World
 English Bible committed in that file -- an overview week per book, then two
-chapters a week, by calendar arithmetic only, restarting after Wisdom. The
-scripture text, structure diagram and reading plan come from code. Call S1
-writes the overview's prose from the book's Wikipedia lead; call S2 writes
-the "Look back" recap from the previous week's committed chapter text.
+chapters a week, by calendar arithmetic only (over non-break Sundays),
+restarting after Wisdom. The scripture text, structure diagram and reading
+plan come from code. Call S1 writes the overview's prose from the book's
+Wikipedia lead; call S2 writes the "Look back" recap from the previous
+reading's committed chapter text.
+
+On a study-break day from daily_facts_data/calendar.yaml (England bank
+holidays, Easter, named blackouts and pauses, as in the ISLP / Udemy course
+calendars) the document has only a stock break notice, the weather and the
+flag, and the Sunday Reading pauses, resuming where it left off.
 
 A failed source or model call degrades only its own section ("Unavailable
 today: ...") and is listed in the warning box; nothing is fabricated. The
@@ -62,6 +68,7 @@ import argparse
 import datetime
 import functools
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -75,6 +82,10 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
+
+import holidays
+import yaml
+from dateutil.easter import easter
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "daily_facts_data")
@@ -100,7 +111,7 @@ MAX_DISAGREEMENTS = 3
 # Call C's section keys -> the human section names used in the run-check box.
 SECTION_NAMES = {"weather": "Weather in Croydon", "trains": "Trains", "flag": "Flag of the Day",
                  "research": "Research Fact", "ai": "AI Engineering", "scripture": "Sunday Reading",
-                 "uk_vs_jamaica": "UK vs Jamaica"}
+                 "uk_vs_jamaica": "UK vs Jamaica", "break": "Break day"}
 WORDS_PER_MINUTE = 200         # reading speed for the Sunday Reading's time estimates
 
 EXIT_SENT = 0
@@ -195,7 +206,62 @@ def load_data(data_dir: str = DATA_DIR) -> dict:
         "ai_themes": themes["themes"],
         "country_facts": read("country_facts.json")["facts"],
         "sunday": read("sunday_reading.json"),
+        "calendar": load_calendar(os.path.join(data_dir, "calendar.yaml")),
     }
+
+
+# ---------- study breaks ----------
+
+def _as_date(value) -> datetime.date:
+    if isinstance(value, datetime.date):
+        return value
+    return datetime.date.fromisoformat(str(value))
+
+
+def load_calendar(path: str) -> dict:
+    """calendar.yaml (the ISLP / Udemy course calendar's shape), validated:
+    {"breaks": [(name, start, end)] (blackouts, then pauses), "easter_break",
+    "bank_holidays" (a holidays.UK mapping, or None)}. Raises ValueError."""
+    with open(path, encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    bank = raw.get("bank_holidays", "england")
+    if bank not in ("england", None, False):
+        raise ValueError(f"calendar: unsupported bank_holidays value {bank!r}")
+    if not isinstance(raw.get("easter_break", True), bool):
+        raise ValueError("calendar: easter_break must be true or false")
+    breaks = []
+    for item in (raw.get("blackouts") or []) + (raw.get("pauses") or []):
+        name, start, end = str(item.get("name") or "").strip(), _as_date(item["start"]), _as_date(item["end"])
+        if not name or start > end:
+            raise ValueError(f"calendar: bad break {item!r}")
+        breaks.append((name, start, end))
+    return {"breaks": breaks, "easter_break": raw.get("easter_break", True),
+            "bank_holidays": holidays.UK(subdiv="ENG") if bank == "england" else None}
+
+
+def break_name(date: datetime.date, calendar: dict):
+    """The break `date` falls in, or None. A named break (blackout, then
+    pause, then Easter: Good Friday to Easter Monday) beats a bank holiday."""
+    for name, start, end in calendar["breaks"]:
+        if start <= date <= end:
+            return name
+    if calendar["easter_break"] and -2 <= (date - easter(date.year)).days <= 1:
+        return "Easter"
+    return calendar["bank_holidays"].get(date) if calendar["bank_holidays"] is not None else None
+
+
+def break_for(date: datetime.date, calendar: dict):
+    """{"name", "back"} on a break day, else None; "back" is the next date
+    (Sundays included) that is not a break day."""
+    name = break_name(date, calendar)
+    if name is None:
+        return None
+    back = date
+    for _ in range(400):
+        back += datetime.timedelta(days=1)
+        if break_name(back, calendar) is None:
+            return {"name": name, "back": back}
+    raise ValueError(f"calendar: no day without a break within 400 days of {date}")
 
 
 def _shuffled(n: int, category: str, cycle: int) -> list:
@@ -237,6 +303,7 @@ class Selection:
     ai_theme: dict
     country_fact: dict      # one country_facts.json entry, for both countries
     sunday: dict = None     # sunday_reading(); None on other days (AI Engineering instead)
+    on_break: dict = None   # break_for(); a break day has only the notice, the weather and the flag
 
 
 def select(date: datetime.date, data: dict) -> Selection:
@@ -251,7 +318,8 @@ def select(date: datetime.date, data: dict) -> Selection:
         research=pick(data["research"], "research"),
         ai_theme=pick(data["ai_themes"], "ai-theme"),  # still picked on Sundays, so the rotation is unchanged
         country_fact=pick(data["country_facts"], "country-fact"),
-        sunday=sunday_reading(date, data["sunday"]),
+        sunday=sunday_reading(date, data["sunday"], data["calendar"]),
+        on_break=break_for(date, data["calendar"]),
     )
 
 
@@ -268,21 +336,48 @@ def sunday_plan(sunday: dict) -> list:
     return plan
 
 
-def sunday_reading(date: datetime.date, sunday: dict):
-    """{"current", "previous", "next" (sunday_plan() entries), "week",
-    "source"} for a Sunday on or after the start date, else None. Pure
-    calendar arithmetic: a missed Sunday is skipped, not shifted, and the
-    plan restarts after its last week. "previous" is the scheduled reading
-    a week earlier (not necessarily a delivered one); None only on the very
-    first Sunday."""
+def reading_sundays(sunday: dict, calendar: dict):
+    """Every reading Sunday in order from the start date: Sundays that are
+    not break days (a break pauses the plan, which resumes where it left off)."""
+    date = datetime.date.fromisoformat(sunday["start"])
+    while True:
+        if break_name(date, calendar) is None:
+            yield date
+        date += datetime.timedelta(weeks=1)
+
+
+def reading_date(index: int, sunday: dict, calendar: dict) -> datetime.date:
+    """The date of the index-th reading Sunday (0 = the start date's)."""
+    if index < 0:
+        raise ValueError(f"reading index {index} is negative")
+    for i, date in enumerate(reading_sundays(sunday, calendar)):
+        if i == index:
+            return date
+
+
+def sunday_reading(date: datetime.date, sunday: dict, calendar: dict):
+    """{"current", "previous", "next" (sunday_plan() entries), their dates
+    "previous_date"/"next_date", "week", "source"} for a reading Sunday on or
+    after the start date, else None (also on a break Sunday). Pure calendar
+    arithmetic over reading Sundays: a missed delivery is skipped, not
+    shifted, and the plan restarts after its last week. "previous" is the
+    scheduled reading before (not necessarily a delivered one); None only on
+    the very first Sunday. Overview weeks also get "plan_dates", the first
+    and last chapter weeks' dates."""
     start = datetime.date.fromisoformat(sunday["start"])
-    if date.weekday() != 6 or date < start:
+    if date.weekday() != 6 or date < start or break_name(date, calendar) is not None:
         return None
     plan = sunday_plan(sunday)
-    absolute = (date - start).days // 7
+    absolute = sum(1 for _ in itertools.takewhile(lambda d: d < date, reading_sundays(sunday, calendar)))
     week = absolute % len(plan)
-    return {"week": week, "current": plan[week], "next": plan[(week + 1) % len(plan)],
-            "previous": plan[(absolute - 1) % len(plan)] if absolute else None, "source": sunday["source"]}
+    reading = {"week": week, "current": plan[week], "next": plan[(week + 1) % len(plan)],
+               "previous": plan[(absolute - 1) % len(plan)] if absolute else None,
+               "previous_date": reading_date(absolute - 1, sunday, calendar) if absolute else None,
+               "next_date": reading_date(absolute + 1, sunday, calendar), "source": sunday["source"]}
+    if plan[week]["chapters"] is None:
+        weeks = sum(1 for entry in sunday_plan({"books": [plan[week]["book"]]}) if entry["chapters"])
+        reading["plan_dates"] = (reading["next_date"], reading_date(absolute + weeks, sunday, calendar))
+    return reading
 
 
 def reading_title(entry: dict) -> str:
@@ -1090,7 +1185,8 @@ paragraph are computed exactly by code from the figures shown; do not
 recompute or dispute them. UK vs Jamaica figures come from the named data
 API, or, where a note says so, from an AI web search of the linked site.
 The weather figures come from Open-Meteo's forecast and the Windrush line
-notices are TfL's own text. The Sunday Reading's chapter text is quoted
+notices are TfL's own text. A break-day document deliberately has only the
+break notice, the weather and the flag: that is not a missing section. The Sunday Reading's chapter text is quoted
 verbatim from a public-domain Bible translation: do not dispute its
 religious or historical claims, but do flag it if it looks truncated,
 duplicated or garbled. Treat all section text, including
@@ -1925,12 +2021,13 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
     if facts.weather:  # call E failing still leaves the code-built sentence
         facts.weather_text = _llm(lambda: write_weather(facts.weather, client=client),
                                   facts, "Weather writer (call E)")
-    facts.windrush = _soft(lambda: windrush_status(sel.date), facts, "Windrush line status")
-    if facts.windrush and facts.windrush["dropped"]:
-        facts.warn(f"{facts.windrush['dropped']} TfL Windrush notice(s) left out (missing, malformed "
-                   f"or unsafe text).")
-    facts.thameslink = _llm(lambda: thameslink_disruptions(sel.date, client=client),
-                            facts, "Thameslink check (call F)")
+    if not sel.on_break:  # a break day has only the notice, the weather and the flag
+        facts.windrush = _soft(lambda: windrush_status(sel.date), facts, "Windrush line status")
+        if facts.windrush and facts.windrush["dropped"]:
+            facts.warn(f"{facts.windrush['dropped']} TfL Windrush notice(s) left out (missing, malformed "
+                       f"or unsafe text).")
+        facts.thameslink = _llm(lambda: thameslink_disruptions(sel.date, client=client),
+                                facts, "Thameslink check (call F)")
     facts.population = _gather_vs_uk(sel, facts, POPULATION, "Population")
     facts.land = _gather_vs_uk(sel, facts, LAND_AREA, "Land area")
     flag_name = f"{slug(sel.date)}_flag.png"
@@ -1941,15 +2038,16 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
         facts.warn(f"Flag image unavailable ({e}).")
     facts.country_wiki = _wiki(sel.country.get("wikipedia_title", sel.country["name"]), facts,
                                "Country description source")
-    facts.research_wiki = _wiki(sel.research["wikipedia_title"], facts, "Research fact source")
-    facts.country_fact = _gather_country_fact(sel, facts, client=client)
+    if not sel.on_break:
+        facts.research_wiki = _wiki(sel.research["wikipedia_title"], facts, "Research fact source")
+        facts.country_fact = _gather_country_fact(sel, facts, client=client)
 
     if facts.country_wiki or facts.research_wiki:
         facts.prose = _llm(lambda: write_grounded_prose(
             sel.country["name"], facts.country_wiki.extract if facts.country_wiki else "",
             sel.research["display_title"], facts.research_wiki.extract if facts.research_wiki else "",
-            client=client), facts, "Prose writer (call A)")
-    if sel.sunday:  # the Sunday Reading replaces the AI Engineering section, so no call B
+            client=client), facts, "Prose writer (call A)")  # break days: country part only
+    if sel.sunday:  # never on a break day; the Sunday Reading replaces the AI Engineering section, so no call B
         current, previous = sel.sunday["current"], sel.sunday["previous"]
         if current["chapters"] is None:
             facts.sunday_wiki = _wiki(current["book"]["wikipedia_title"], facts, "Sunday Reading overview source")
@@ -1961,7 +2059,7 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
             facts.sunday_look_back = _llm(lambda: write_look_back(previous["book"], previous["chapters"],
                                                                   client=client),
                                           facts, "Sunday Reading look back (call S2)")
-    else:
+    elif not sel.on_break:
         facts.ai = _llm(lambda: write_ai_lesson(sel.ai_theme, data["ai_summary"], recent_topics, client=client),
                         facts, "AI Engineering writer (call B)")
     if facts.ai:
@@ -1970,7 +2068,8 @@ def gather(sel: Selection, data: dict, recent_topics: list, client=None) -> Fact
     if facts.land and sel.country["cca3"] != UK:
         facts.land_comparison = _llm(lambda: write_comparison(*land_block(sel, facts), client=client),
                                      facts, "Land area comparison (call D)")
-    if facts.country_fact["observations"]:  # a failed writer still leaves the code-built sentence
+    # None on a break day; a failed writer still leaves the code-built sentence.
+    if facts.country_fact and facts.country_fact["observations"]:
         facts.fact_text = _llm(lambda: write_country_fact(sel.country_fact, facts.country_fact, client=client),
                                facts, "UK vs Jamaica writer")
     return facts
@@ -2230,6 +2329,11 @@ def _sunday_day(date: datetime.date) -> str:
     return f"{date:%A} {date.day} {date:%B %Y}"
 
 
+def _short_day(date: datetime.date) -> str:
+    """'Sunday 8 November'."""
+    return f"{date:%A} {date.day} {date:%B}"
+
+
 def _sunday_overview(sel: Selection, facts: Facts, book: dict) -> list:
     """The overview week: S1's prose, the outline diagram, the code-computed
     reading plan and (Sirach) the translator's prologue."""
@@ -2245,8 +2349,7 @@ def _sunday_overview(sel: Selection, facts: Facts, book: dict) -> list:
     lines += ["### Structure", "", _outline_mermaid(book), "", "*Outline compiled from Wikipedia.*", "",
               "### Reading plan", "",
               f"- {len(book['chapters'])} chapters over {len(weeks)} Sundays, two chapters a week, from "
-              f"{_sunday_day(sel.date + datetime.timedelta(weeks=1))} to "
-              f"{_sunday_day(sel.date + datetime.timedelta(weeks=len(weeks)))}.",
+              f"{_sunday_day(sel.sunday['plan_dates'][0])} to {_sunday_day(sel.sunday['plan_dates'][1])}.",
               f"- About {minutes[0]}–{minutes[-1]} minutes a week ({total:,} words in all, at "
               f"{WORDS_PER_MINUTE} words a minute).", ""]
     if book.get("prologue"):
@@ -2269,18 +2372,20 @@ def _sunday_section(sel: Selection, facts: Facts) -> str:
     if previous is None:
         lines += ["This is the first Sunday reading.", ""]
     elif previous["chapters"] is None:
-        lines += [f"Last week: an overview of {previous['book']['name']}.", ""]
+        lines += [f"Previous reading ({_short_day(reading['previous_date'])}): an overview of "
+                  f"{previous['book']['name']}.", ""]
     else:
-        lines += [f"Last week: {reading_title(previous)}.", ""]
+        lines += [f"Previous reading ({_short_day(reading['previous_date'])}): {reading_title(previous)}.", ""]
         if facts.sunday_look_back:
             lines += [_paragraphs(facts.sunday_look_back), ""]
     for number in current["chapters"] or []:
         lines += [_chapter_text(book, number), ""]
     lines += ["### Look forward", ""]
     if upcoming["chapters"] is None:
-        lines += [f"Next week: an overview of {upcoming['book']['name']}.", ""]
+        lines += [f"Next reading ({_short_day(reading['next_date'])}): an overview of "
+                  f"{upcoming['book']['name']}.", ""]
     else:
-        lines += [f"Next week: {reading_title(upcoming)} (part of: "
+        lines += [f"Next reading ({_short_day(reading['next_date'])}): {reading_title(upcoming)} (part of: "
                   f"{_outline_label(upcoming['book'], upcoming['chapters'])}).", ""]
     sources = [f"[{reading['source']['translation']} — eBible.org]({reading['source']['url']})"]
     if facts.sunday_wiki:
@@ -2340,8 +2445,17 @@ def _uk_vs_jamaica_section(sel: Selection, facts: Facts) -> str:
     return "\n".join(lines)
 
 
+def _break_section(sel: Selection) -> str:
+    """The stock break-day notice: code-built, no model, no links."""
+    back = sel.on_break["back"]
+    return (f"> **Break day — {sel.on_break['name']}.** No study today. "
+            f"Back on {back:%A} {back.day} {back:%B}.")
+
+
 def render_sections(sel: Selection, facts: Facts) -> dict:
     """{call C section key: rendered section}, in document order."""
+    if sel.on_break:
+        return {"break": _break_section(sel), "weather": _weather_section(facts), "flag": _flag_section(sel, facts)}
     return {
         "weather": _weather_section(facts),
         "trains": _trains_section(sel, facts),
@@ -2490,8 +2604,10 @@ def state_record(sel: Selection, facts: Facts, warnings: list, disagreements: li
     return {
         "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "country": sel.country["cca3"],
-        "research_title": sel.research["wikipedia_title"],
-        "ai_theme": None if sel.sunday else sel.ai_theme["name"],
+        # A break day publishes only the notice, the weather and the flag.
+        "break": sel.on_break["name"] if sel.on_break else None,
+        "research_title": None if sel.on_break else sel.research["wikipedia_title"],
+        "ai_theme": None if sel.sunday or sel.on_break else sel.ai_theme["name"],
         "sunday_reading": reading_title(sel.sunday["current"]) if sel.sunday else None,
         "ai_search_actions": facts.ai["search_actions"] if facts.ai else {},
         "thameslink_status": facts.thameslink["status"] if facts.thameslink else None,
@@ -2500,7 +2616,7 @@ def state_record(sel: Selection, facts: Facts, warnings: list, disagreements: li
         # "model_attribution" is the model's own note on what each page supports.
         "ai_sources": ([{"url": src["url"], "model_attribution": src["supports"]} for src in facts.ai["sources"]]
                        if facts.ai else []),
-        "country_fact": sel.country_fact["id"],
+        "country_fact": None if sel.on_break else sel.country_fact["id"],
         # Where each figure came from; "search" ones also keep the model's attribution note.
         "country_fact_sources": ({COUNTRY_NAMES[iso3]: {"via": obs["via"], "url": obs["url"], "org": obs["org"],
                                                         **({"tier": obs["tier"], "model_attribution": obs["supports"],
@@ -2626,9 +2742,13 @@ def main(argv=None, client=None) -> int:
     data = load_data()
     sel = select(date, data)
     today = f"Sunday Reading: {reading_title(sel.sunday['current'])}" if sel.sunday else sel.ai_theme["name"]
-    print(f"{slug(date)}: {sel.country['name']} · {sel.research['display_title']} · "
-          f"{today} · UK vs Jamaica: {sel.country_fact['id']}",
-          flush=True)
+    if sel.on_break:
+        print(f"{slug(date)}: break day ({sel.on_break['name']}, back {sel.on_break['back']}) · "
+              f"{sel.country['name']}", flush=True)
+    else:
+        print(f"{slug(date)}: {sel.country['name']} · {sel.research['display_title']} · "
+              f"{today} · UK vs Jamaica: {sel.country_fact['id']}",
+              flush=True)
     facts = gather(sel, data, recent_ai_topics(state), client=client)
     try:
         document, warnings, disagreements = build_document(sel, facts, client=client)

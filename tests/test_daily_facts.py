@@ -2347,7 +2347,7 @@ def sunday(text):
 
 class SundayReadingTests(Base):
     def reading(self, date):
-        return df.sunday_reading(sunday(date), self.data["sunday"])
+        return df.sunday_reading(sunday(date), self.data["sunday"], self.data["calendar"])
 
     def titles(self, date):
         r = self.reading(date)
@@ -2371,16 +2371,36 @@ class SundayReadingTests(Base):
         for date, titles in (
                 ("2026-11-01", ("Sirach overview", None, "Sirach 1–2")),
                 ("2026-11-08", ("Sirach 1–2", "Sirach overview", "Sirach 3–4")),
-                ("2026-11-15", ("Sirach 3–4", "Sirach 1–2", "Sirach 5–6")),
-                ("2027-05-02", ("Sirach 51", "Sirach 49–50", "Wisdom of Solomon overview")),
-                ("2027-05-09", ("Wisdom of Solomon overview", "Sirach 51", "Wisdom of Solomon 1–2")),
-                ("2027-07-11", ("Wisdom of Solomon 17–18", "Wisdom of Solomon 15–16", "Wisdom of Solomon 19")),
-                ("2027-07-18", ("Wisdom of Solomon 19", "Wisdom of Solomon 17–18", "Sirach overview")),
+                # The Birthday break Sunday (15 Nov) pauses the plan: it resumes a week later.
+                ("2026-11-22", ("Sirach 3–4", "Sirach 1–2", "Sirach 5–6")),
+                # Christmas & New Year (27 Dec, 3 Jan) and Easter (28 Mar 2027) pause it too.
+                ("2026-12-20", ("Sirach 11–12", "Sirach 9–10", "Sirach 13–14")),
+                ("2027-01-10", ("Sirach 13–14", "Sirach 11–12", "Sirach 15–16")),
+                ("2027-04-04", ("Sirach 35–36", "Sirach 33–34", "Sirach 37–38")),
+                ("2027-05-30", ("Sirach 51", "Sirach 49–50", "Wisdom of Solomon overview")),
+                ("2027-06-06", ("Wisdom of Solomon overview", "Sirach 51", "Wisdom of Solomon 1–2")),
+                ("2027-08-08", ("Wisdom of Solomon 17–18", "Wisdom of Solomon 15–16", "Wisdom of Solomon 19")),
+                ("2027-08-15", ("Wisdom of Solomon 19", "Wisdom of Solomon 17–18", "Sirach overview")),
                 # Week 38 restarts the plan, and its overview looks back on Wisdom 19.
-                ("2027-07-25", ("Sirach overview", "Wisdom of Solomon 19", "Sirach 1–2"))):
+                ("2027-08-22", ("Sirach overview", "Wisdom of Solomon 19", "Sirach 1–2"))):
             self.assertEqual(self.titles(date), titles, date)
         self.assertEqual(len(df.sunday_plan(self.data["sunday"])), 38)
-        self.assertEqual(self.reading("2027-07-25")["week"], 0)
+        self.assertEqual(self.reading("2027-08-22")["week"], 0)
+
+    def test_breaks_pause_the_reading_and_dates_skip_them(self):
+        for date in ("2026-11-15", "2026-12-27", "2027-01-03", "2027-03-28"):
+            self.assertIsNone(self.reading(date), date)
+            self.assertIsNone(df.select(sunday(date), self.data).sunday, date)
+        # Previous/next readings are the neighbouring reading Sundays, across a pause.
+        r = self.reading("2026-11-22")
+        self.assertEqual((r["previous_date"], r["next_date"]), (sunday("2026-11-08"), sunday("2026-11-29")))
+        r = self.reading("2026-11-08")
+        self.assertEqual((r["previous_date"], r["next_date"]), (sunday("2026-11-01"), sunday("2026-11-22")))
+        r = self.reading("2026-12-20")
+        self.assertEqual(r["next_date"], sunday("2027-01-10"))
+        self.assertIsNone(self.reading("2026-11-01")["previous_date"])
+        self.assertEqual(self.reading("2026-11-01")["plan_dates"], (sunday("2026-11-08"), sunday("2027-05-30")))
+        self.assertNotIn("plan_dates", r)
 
     def test_only_sundays_from_the_start(self):
         for date in ("2026-10-31", "2026-11-07", "2026-11-02", "2026-10-25"):  # Saturdays, a Monday, pre-start
@@ -2417,7 +2437,7 @@ class SundayReadingTests(Base):
         self.assertTrue(data["books"][0]["prologue"].startswith("WHEREAS many and great things"))
 
     def test_chapter_sunday_replaces_ai_engineering(self):
-        sel, facts, markdown, warnings, client = self.build("2026-11-15")
+        sel, facts, markdown, warnings, client = self.build("2026-11-22")
         self.assertEqual([w for w in warnings if "Sunday" in w], [])
         self.assertNotIn("ai_lesson", self.calls(client))
         self.assertNotIn("book_overview", self.calls(client))
@@ -2425,7 +2445,8 @@ class SundayReadingTests(Base):
         self.assertIsNone(facts.ai)
         section = markdown.split("## Sunday Reading: Sirach 3–4\n", 1)[1].split("\n## ", 1)[0]
         self.assertIn("*World English Bible (public domain)*", section)
-        self.assertIn("### Look back\n\nLast week: Sirach 1–2.\n\n" + GOOD_S2["summary"], section)
+        self.assertIn("### Look back\n\nPrevious reading (Sunday 8 November): Sirach 1–2.\n\n" + GOOD_S2["summary"],
+                      section)
         # Verse text verbatim, its poetry lines joined by hard line breaks.
         self.assertIn("### Sirach 3\n\n**1** Hear me, your father, O my children,  \n"
                       "and do what you hear, that you all may be safe.\n", section)
@@ -2434,7 +2455,8 @@ class SundayReadingTests(Base):
         self.assertIn("\n\n*Verse 19 is left out of this translation: the best manuscripts do not have it.*\n\n"
                       "### Sirach 4\n", section)
         self.assertLess(section.index("### Look back"), section.index("### Sirach 3"))
-        self.assertIn("### Look forward\n\nNext week: Sirach 5–6 (part of: Teaching for daily life).", section)
+        self.assertIn("### Look forward\n\nNext reading (Sunday 29 November): Sirach 5–6 (part of: Teaching for "
+                      "daily life).", section)
         self.assertIn("Source: [World English Bible — eBible.org](https://ebible.org/web/)", section)
         # The other sections are all still there, in order, and every link is code-owned.
         for before, after in (("## Weather in Croydon", "## Trains"), ("## Research Fact", "## Sunday Reading"),
@@ -2444,15 +2466,16 @@ class SundayReadingTests(Base):
         self.assertIn("<br", str(df.converter_view(section)[0]))
 
     def test_look_back_is_grounded_in_the_previous_book(self):
-        _, _, markdown, _, client = self.build("2027-05-09")   # Wisdom overview looks back on Sirach 51
+        _, _, markdown, _, client = self.build("2027-06-06")   # Wisdom overview looks back on Sirach 51
         request = next(r for r in client.requests if r["text"]["format"]["name"] == "look_back")
         self.assertNotIn("tools", request)
         self.assertTrue(request["input"].startswith("READING: Sirach 51\n\nCHAPTER 51\n"
                                                     "1 I will give thanks to you, O Lord, O King, and will "
                                                     "praise you, O God my Savior. I give thanks to your name,"))
         self.assertNotIn("CHAPTER 50", request["input"])
-        self.assertIn("Last week: Sirach 51.", markdown)
-        self.assertIn("Next week: Wisdom of Solomon 1–2 (part of: Exhortation to justice; The wicked and the just).", markdown)
+        self.assertIn("Previous reading (Sunday 30 May): Sirach 51.", markdown)
+        self.assertIn("Next reading (Sunday 13 June): Wisdom of Solomon 1–2 (part of: Exhortation to justice; "
+                      "The wicked and the just).", markdown)
 
     def test_omitted_verse_notes(self):
         book = self.data["sunday"]["books"][0]
@@ -2475,27 +2498,28 @@ class SundayReadingTests(Base):
         self.assertIn('```mermaid\nflowchart TD\n    s0["1–2: Wisdom and the fear of the Lord"]\n', section)
         self.assertIn("    s5 --> s6\n```", section)
         self.assertIn("- 51 chapters over 26 Sundays, two chapters a week, from Sunday 8 November 2026 to "
-                      "Sunday 2 May 2027.", section)
+                      "Sunday 30 May 2027.", section)
         self.assertRegex(section, r"- About \d+–\d+ minutes a week \(26,\d{3} words in all")
         self.assertIn("### The Prologue\n\nWHEREAS many", section)
         self.assertIn("### Look back\n\nThis is the first Sunday reading.", section)
-        self.assertIn("Next week: Sirach 1–2 (part of: Wisdom and the fear of the Lord).", section)
+        self.assertIn("Next reading (Sunday 8 November): Sirach 1–2 (part of: Wisdom and the fear of the Lord).",
+                      section)
         self.assertIn("Sources: [World English Bible — eBible.org](https://ebible.org/web/) · "
                       "[Book_of_Sirach — Wikipedia](https://en.wikipedia.org/wiki/Book_of_Sirach)", section)
         self.assertNotIn("### Sirach 1\n", section)
         self.assertEqual(set(df.rendered_links(df.converter_view(markdown)[0])), df.allowed_links(sel, facts))
 
     def test_second_book_overview_has_no_prologue(self):
-        _, _, markdown, _, _ = self.build("2027-05-09")
-        self.assertIn("- 19 chapters over 10 Sundays, two chapters a week, from Sunday 16 May 2027 to "
-                      "Sunday 18 July 2027.", markdown)
+        _, _, markdown, _, _ = self.build("2027-06-06")
+        self.assertIn("- 19 chapters over 10 Sundays, two chapters a week, from Sunday 13 June 2027 to "
+                      "Sunday 15 August 2027.", markdown)
         self.assertNotIn("### The Prologue", markdown)
 
     def test_model_failures_leave_the_scripture(self):
         client = good_client()
         client.answers["look_back"] = [df.LLMError("bad")]
-        _, _, markdown, warnings, _ = self.build("2026-11-15", client)
-        self.assertIn("Last week: Sirach 1–2.\n\n### Sirach 3", markdown)
+        _, _, markdown, warnings, _ = self.build("2026-11-22", client)
+        self.assertIn("Previous reading (Sunday 8 November): Sirach 1–2.\n\n### Sirach 3", markdown)
         self.assertIn("**1** Hear me, your father", markdown)
         self.assertTrue(any("call S2" in w for w in warnings))
 
@@ -2522,22 +2546,153 @@ class SundayReadingTests(Base):
 
     def test_disagreement_about_an_absent_section_is_dropped(self):
         client = with_disagreements(good_client(), ("ai", "The AI topic is wrong."))
-        _, _, markdown, _, _ = self.build("2026-11-15", client)
+        _, _, markdown, _, _ = self.build("2026-11-22", client)
         self.assertNotIn("AI reviewer note", markdown)
 
     def test_state_records_the_reading(self):
         state_path = os.path.join(self.tmp, "state.json")
         with patch.object(df, "http_get", FakeHTTP(default_routes())), contextlib.redirect_stderr(io.StringIO()), \
                 patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)):
-            df.main(["--date", "2026-11-15", "--state", state_path], client=good_client())
-            df.main(["--date", "2026-11-14", "--state", state_path], client=good_client())
+            df.main(["--date", "2026-11-22", "--state", state_path], client=good_client())
+            df.main(["--date", "2026-11-21", "--state", state_path], client=good_client())
         sent = df.load_state(state_path)["sent"]
-        self.assertEqual(sent["2026-11-15"]["sunday_reading"], "Sirach 3–4")
-        self.assertIsNone(sent["2026-11-15"]["ai_theme"])
-        self.assertIsNone(sent["2026-11-15"]["ai_topic"])
+        self.assertEqual(sent["2026-11-22"]["sunday_reading"], "Sirach 3–4")
+        self.assertIsNone(sent["2026-11-22"]["ai_theme"])
+        self.assertIsNone(sent["2026-11-22"]["ai_topic"])
         # The Saturday before is an ordinary AI Engineering day.
-        self.assertIsNone(sent["2026-11-14"]["sunday_reading"])
-        self.assertEqual(sent["2026-11-14"]["ai_topic"], "Context rot")
+        self.assertIsNone(sent["2026-11-21"]["sunday_reading"])
+        self.assertEqual(sent["2026-11-21"]["ai_topic"], "Context rot")
+        self.assertIsNone(sent["2026-11-21"]["break"])
+
+
+# ---------- study breaks ----------
+
+def day(text):
+    return datetime.date.fromisoformat(text)
+
+
+class BreakTests(Base):
+    def calendar(self, text):
+        path = os.path.join(self.tmp, "calendar.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return df.load_calendar(path)
+
+    def brk(self, date, calendar=None):
+        found = df.break_for(day(date), calendar or self.data["calendar"])
+        return found and (found["name"], found["back"].isoformat())
+
+    def test_real_calendar(self):
+        for date, expected in (
+                ("2026-11-09", ("Birthday break", "2026-11-17")), ("2026-11-16", ("Birthday break", "2026-11-17")),
+                ("2026-12-25", ("Christmas & New Year", "2027-01-04")),
+                ("2027-03-26", ("Easter", "2027-03-30")), ("2027-03-29", ("Easter", "2027-03-30")),
+                ("2027-05-03", ("May Day", "2027-05-04")), ("2027-05-31", ("Spring Bank Holiday", "2027-06-01")),
+                ("2027-08-30", ("Late Summer Bank Holiday", "2027-08-31")),
+                ("2026-11-08", None), ("2026-11-17", None), ("2027-01-04", None), ("2027-03-25", None)):
+            self.assertEqual(self.brk(date), expected, date)
+        for name, start, end in self.data["calendar"]["breaks"]:
+            self.assertTrue(name and start <= end)
+
+    def test_pauses_bank_holidays_and_year_crossing(self):
+        cal = self.calendar("bank_holidays: england\neaster_break: false\nblackouts:\n"
+                            "  - {name: Spring, start: 2027-05-28, end: 2027-05-30}\n"
+                            "pauses:\n  - {name: Pause A, start: 2027-07-01, end: 2027-07-03}\n"
+                            "  - {name: Pause B, start: 2027-07-04, end: 2027-07-05}\n"
+                            "  - {name: Pause C, start: 2027-07-05, end: 2027-07-07}\n"
+                            "  - {name: Winter, start: 2027-12-30, end: 2028-01-02}\n")
+        # A blackout ending the day before a bank holiday: back skips both.
+        self.assertEqual(self.brk("2027-05-29", cal), ("Spring", "2027-06-01"))
+        self.assertEqual(self.brk("2027-05-31", cal), ("Spring Bank Holiday", "2027-06-01"))
+        # Adjacent and overlapping pauses run together; the first listed wins a shared day.
+        self.assertEqual(self.brk("2027-07-02", cal), ("Pause A", "2027-07-08"))
+        self.assertEqual(self.brk("2027-07-05", cal), ("Pause B", "2027-07-08"))
+        # Across the new year, where back also skips New Year's Day (observed) on Monday 3 January.
+        self.assertEqual(self.brk("2027-12-31", cal), ("Winter", "2028-01-04"))
+        self.assertIsNone(self.brk("2027-03-28", cal))
+        self.assertEqual(self.brk("2027-03-26", cal), ("Good Friday", "2027-03-27"))
+        none = self.calendar("bank_holidays: null\neaster_break: false\nblackouts: []\npauses: []\n")
+        self.assertIsNone(self.brk("2027-05-31", none))
+        endless = self.calendar("pauses:\n  - {name: Long, start: 2027-01-01, end: 2028-05-15}\n")
+        with self.assertRaises(ValueError):
+            df.break_for(day("2027-01-01"), endless)
+
+    def test_boxing_day_sunday_pauses_the_reading(self):
+        self.assertEqual(self.brk("2027-12-26"), ("Boxing Day", "2027-12-29"))
+        self.assertIsNone(df.sunday_reading(day("2027-12-26"), self.data["sunday"], self.data["calendar"]))
+        self.assertIsNone(df.select(day("2027-12-26"), self.data).sunday)
+
+    def test_reading_date_rejects_negative_index(self):
+        self.assertRaises(ValueError, df.reading_date, -1, self.data["sunday"], self.data["calendar"])
+
+    def test_calendar_validation(self):
+        for text in ("bank_holidays: scotland\n", "easter_break: maybe\n",
+                     "blackouts:\n  - {name: X, start: 2027-01-05, end: 2027-01-04}\n",
+                     "pauses:\n  - {name: '', start: 2027-01-04, end: 2027-01-05}\n",
+                     "pauses:\n  - {name: X, start: 2027-02-30, end: 2027-03-01}\n"):
+            with self.assertRaises(ValueError, msg=text):
+                self.calendar(text)
+
+    def build(self, date, routes=None):
+        client = good_client()
+        http = FakeHTTP(routes or default_routes())
+        sel = df.select(day(date), self.data)
+        sel.country = next(c for c in self.data["countries"] if c["cca3"] == "JAM")
+        with patch.object(df, "http_get", http), contextlib.redirect_stderr(io.StringIO()):
+            facts = df.gather(sel, self.data, [], client=client)
+            markdown, warnings, _ = df.build_document(sel, facts, client=client)
+        return sel, facts, markdown, warnings, client, http
+
+    def test_break_document_has_only_notice_weather_and_flag(self):
+        for date, notice in (
+                ("2026-11-10", "> **Break day — Birthday break.** No study today. Back on Tuesday 17 November."),
+                # A break Sunday: no Sunday Reading either.
+                ("2026-11-15", "> **Break day — Birthday break.** No study today. Back on Tuesday 17 November."),
+                ("2026-12-31", "> **Break day — Christmas & New Year.** No study today. Back on Monday 4 January.")):
+            sel, facts, markdown, warnings, client, http = self.build(date)
+            body = markdown.split(notice, 1)
+            self.assertEqual(len(body), 2, date)
+            self.assertLess(body[1].index("## Weather in Croydon"), body[1].index("## Flag of the Day: Jamaica"))
+            self.assertIn("Source: [Open-Meteo]", markdown)
+            self.assertIn("![Flag of Jamaica]", markdown)
+            self.assertIn(GOOD_A["country_blurb"], markdown)
+            for absent in ("## Trains", "Research Fact", "AI Engineering", "UK vs Jamaica", "Sunday Reading",
+                           GOOD_A["research_headline"]):
+                self.assertNotIn(absent, markdown, date)
+            calls = {r["text"]["format"]["name"] for r in client.requests}
+            self.assertEqual(calls, {"weather", "grounded_prose", "comparison", "run_check"}, date)
+            prose = next(r for r in client.requests if r["text"]["format"]["name"] == "grounded_prose")
+            self.assertTrue(prose["input"].endswith("RESEARCH SOURCE:\n"))
+            research = urllib.parse.quote(sel.research["wikipedia_title"].replace(" ", "_"), safe="")
+            for url in http.calls:
+                for unwanted in ("api.tfl.gov.uk", "country/GBR;JAM/", "imf.org", "ghoapi", research):
+                    self.assertNotIn(unwanted, url, date)
+            self.assertEqual([w for w in warnings if "unavailable" in w.lower()], [], date)
+            df.check_links(markdown, df.allowed_links(sel, facts))
+
+    def test_break_with_weather_and_flag_down(self):
+        routes = dict(default_routes(), **{"api.open-meteo.com": TimeoutError(), "flagcdn.com": TimeoutError()})
+        _, _, markdown, warnings, _, _ = self.build("2026-11-10", routes)
+        self.assertIn("> **Break day — Birthday break.**", markdown)
+        self.assertIn("*Unavailable today: the Croydon weather forecast", markdown)
+        self.assertIn("*Flag image unavailable today.*", markdown)
+        self.assertTrue(any("Croydon weather unavailable" in w for w in warnings))
+
+    def test_break_state_records_only_what_was_published(self):
+        state_path = os.path.join(self.tmp, "state.json")
+        out = io.StringIO()
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(out), \
+                patch("daily_facts.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+            self.assertEqual(df.main(["--date", "2026-11-10", "--state", state_path], client=good_client()), 0)
+        self.assertIn("daily_facts_2026-11-10: break day (Birthday break, back 2026-11-17)", out.getvalue())
+        entry = df.load_state(state_path)["sent"]["2026-11-10"]
+        self.assertEqual(entry["break"], "Birthday break")
+        for key in ("research_title", "ai_theme", "ai_topic", "sunday_reading", "country_fact",
+                    "thameslink_status", "country_fact_compared"):
+            self.assertIsNone(entry[key], key)
+        self.assertEqual(entry["country_fact_sources"], {})
+        self.assertEqual(entry["ai_sources"], [])
 
 
 class WorkflowTests(unittest.TestCase):

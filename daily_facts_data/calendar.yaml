@@ -1,0 +1,26 @@
+# Study breaks for daily_facts.py, in the same shape as the ISLP / Udemy course
+# calendars (ISLP_Kindle_Daily/curriculum/calendar.yaml); keep the breaks in
+# step with them. Dates are London calendar dates. On a break day the document
+# has only a break notice, the weather and the flag, and the Sunday Reading
+# pauses (it resumes where it left off). Add or change future dates only:
+# editing a past break re-times every later Sunday Reading.
+timezone: Europe/London
+
+# England & Wales bank holidays, from the pinned `holidays` package
+# (holidays.UK(subdiv="ENG")).
+bank_holidays: england
+
+# Good Friday to Easter Monday is a named break every year ("Easter").
+easter_break: true
+
+# Named breaks. Inclusive start and end dates.
+blackouts:
+  - name: Birthday break
+    start: 2026-11-09
+    end: 2026-11-16
+  - name: Christmas & New Year
+    start: 2026-12-24
+    end: 2027-01-03
+
+# Ad-hoc pauses (same shape as blackouts).
+pauses: []
