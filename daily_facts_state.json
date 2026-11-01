@@ -1000,6 +1000,62 @@
       "warnings": [
         "UK vs Jamaica: WHO API unavailable (WHO MDG_0000000026: HTTPError 500); tried a web search instead."
       ]
+    },
+    "2026-11-02": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Strict structured outputs match a supported JSON Schema, but only a subset is supported; the guide distinguishes tool calling from structured responses.",
+          "url": "https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses"
+        },
+        {
+          "model_attribution": "Function calling lets models interface with external systems, while tool-call arguments can be structured JSON.",
+          "url": "https://developers.openai.com/api/docs/guides/function-calling?strict-mode=disabled"
+        }
+      ],
+      "ai_theme": "Tool use and structured outputs",
+      "ai_topic": "Schema Is Not Semantic Validation",
+      "at": "2026-11-01T09:48:44+00:00",
+      "break": null,
+      "country": "CRI",
+      "country_fact": "under-five-mortality",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The page lists Jamaica’s under-five mortality rate as 17.8 deaths per 1,000 live births in 2024.",
+          "org": "UNICEF",
+          "tier": 1,
+          "unit_note": "Deaths before age five per 1,000 live births.",
+          "url": "https://data.unicef.org/country/jam/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The page lists the United Kingdom under-five mortality rate as 4.7 deaths per 1,000 live births in 2024.",
+          "org": "UNICEF",
+          "tier": 1,
+          "unit_note": "Deaths before age five per 1,000 live births.",
+          "url": "https://data.unicef.org/country/gbr/",
+          "via": "search"
+        }
+      },
+      "research_title": "Luddites",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": [
+        "Windrush line notice covers Saturday 31 October and Sunday 1 November, which have passed; it provides no disruption information for Monday 2 November."
+      ]
     }
   }
 }
