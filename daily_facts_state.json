@@ -1150,6 +1150,22 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-05": {
+      "ai_theme": "Context engineering",
+      "ai_topic": "Position-Swapping Context Tests",
+      "at": "2026-11-04T09:58:10+00:00",
+      "break": null,
+      "country": "CHN",
+      "country_fact": "maternal-mortality",
+      "manual_note": "Backfilled by hand: run 41810865311 sent this but its state push hit GitHub HTTP 500. Source/search-action fields not recoverable from logs.",
+      "research_title": "Opportunity cost",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "warnings": [
+        "Run check: UK–Jamaica section says figures not compared due to different sources, but both came via the same WHO web-search fallback.",
+        "UK vs Jamaica: WHO API unavailable (WHO MDG_0000000026: HTTPError 500); tried a web search instead."
+      ]
     }
   }
 }
