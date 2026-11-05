@@ -1166,6 +1166,52 @@
         "Run check: UK–Jamaica section says figures not compared due to different sources, but both came via the same WHO web-search fallback.",
         "UK vs Jamaica: WHO API unavailable (WHO MDG_0000000026: HTTPError 500); tried a web search instead."
       ]
+    },
+    "2026-11-06": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines execute-tool spans, tool name and call ID attributes, and notes that arguments and results are opt-in and may be sensitive.",
+          "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md"
+        },
+        {
+          "model_attribution": "States that MCP tool-call execution spans are compatible with GenAI execute-tool spans.",
+          "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md"
+        }
+      ],
+      "ai_theme": "Observability and tracing",
+      "ai_topic": "Give Every Tool Call a Span",
+      "at": "2026-11-05T09:57:40+00:00",
+      "break": null,
+      "country": "SLE",
+      "country_fact": "life-expectancy",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/life-expectancy-at-birth-(years)",
+          "via": "api"
+        },
+        "UK": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/life-expectancy-at-birth-(years)",
+          "via": "api"
+        }
+      },
+      "research_title": "Cultural relativism",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
