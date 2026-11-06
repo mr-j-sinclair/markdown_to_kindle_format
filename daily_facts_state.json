@@ -1212,6 +1212,58 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-07": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "OpenAI describes subagents with separate contexts working in parallel while a main agent coordinates and combines their results.",
+          "url": "https://developers.openai.com/api/docs/guides/agents-api/multi-agent"
+        }
+      ],
+      "ai_theme": "Multi-agent systems and orchestration",
+      "ai_topic": "Artifact-Mediated Agent Coordination",
+      "at": "2026-11-06T09:58:44+00:00",
+      "break": null,
+      "country": "UZB",
+      "country_fact": "hdi",
+      "country_fact_compared": [
+        false,
+        "a figure comes from a different source, so definitions may differ"
+      ],
+      "country_fact_search_actions": {
+        "search": 2
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The table lists Jamaica’s Human Development Index value for 2023 as 0.720.",
+          "org": "UNDP",
+          "tier": 1,
+          "unit_note": "Human Development Index value for the whole country",
+          "url": "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.pdf",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The 2025 statistical annex lists the United Kingdom’s HDI as 0.946.",
+          "org": "UNDP",
+          "tier": 2,
+          "unit_note": "Human Development Index for the United Kingdom, on a 0–1 scale",
+          "url": "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.pdf",
+          "via": "search"
+        }
+      },
+      "research_title": "Tide",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": [
+        "The Windrush notice is explicitly for Friday 6 November after 23:30, so it is stale for a Saturday 7 November morning digest."
+      ]
     }
   }
 }
