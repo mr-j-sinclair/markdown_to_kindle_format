@@ -1264,6 +1264,41 @@
       "warnings": [
         "The Windrush notice is explicitly for Friday 6 November after 23:30, so it is stale for a Saturday 7 November morning digest."
       ]
+    },
+    "2026-11-08": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-11-07T09:19:34+00:00",
+      "break": null,
+      "country": "WSM",
+      "country_fact": "remittances",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/BX.TRF.PWKR.DT.GD.ZS?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/BX.TRF.PWKR.DT.GD.ZS?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Speed of sound",
+      "reviewer_disagreements": [],
+      "sunday_reading": "Sirach 1–2",
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
