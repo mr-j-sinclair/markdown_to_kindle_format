@@ -1299,6 +1299,25 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-09": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-11-08T09:37:09+00:00",
+      "break": "Birthday break",
+      "country": "MLT",
+      "country_fact": null,
+      "country_fact_compared": null,
+      "country_fact_search_actions": {},
+      "country_fact_sources": {},
+      "research_title": null,
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {},
+      "thameslink_status": null,
+      "warnings": []
     }
   }
 }
