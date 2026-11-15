@@ -1446,6 +1446,25 @@
         "Population unavailable (World Bank SP.POP.TOTL: HTTPError 502).",
         "Land area unavailable (World Bank AG.LND.TOTL.K2: HTTPError 502)."
       ]
+    },
+    "2026-11-16": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-11-15T09:59:27+00:00",
+      "break": "Birthday break",
+      "country": "MLI",
+      "country_fact": null,
+      "country_fact_compared": null,
+      "country_fact_search_actions": {},
+      "country_fact_sources": {},
+      "research_title": null,
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {},
+      "thameslink_status": null,
+      "warnings": []
     }
   }
 }
