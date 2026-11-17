@@ -1528,6 +1528,50 @@
       "warnings": [
         "Croydon weather unavailable (Open-Meteo forecast: URLError)."
       ]
+    },
+    "2026-11-18": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Contrasts refusal-based training with safe-completion training, which centres safety on the model’s output and aims to provide safe assistance.",
+          "url": "https://openai.com/index/gpt-5-safe-completions/"
+        },
+        {
+          "model_attribution": "Research paper describing experiments comparing refusal training and output-centric safe-completion training.",
+          "url": "https://cdn.openai.com/pdf/be60c07b-6bc2-4f54-bcee-4141e1d6c69a/gpt-5-safe_completions.pdf"
+        }
+      ],
+      "ai_theme": "Guardrails and safety",
+      "ai_topic": "Output-Centric Safe Completions",
+      "at": "2026-11-17T11:18:54+00:00",
+      "break": null,
+      "country": "LIE",
+      "country_fact": "homicide",
+      "country_fact_compared": [
+        false,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 2
+      },
+      "country_fact_sources": {},
+      "research_title": "Solar cell",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Population and land area are unavailable because the World Bank requests timed out.",
+        "The UK vs Jamaica fact is unavailable; neither country’s figure was found today.",
+        "Population unavailable (World Bank SP.POP.TOTL: TimeoutError).",
+        "Land area unavailable (World Bank AG.LND.TOTL.K2: TimeoutError).",
+        "UK vs Jamaica: UK's figure not available today (web search: not found).",
+        "UK vs Jamaica: Jamaica's figure not available today (web search: not found)."
+      ]
     }
   }
 }
