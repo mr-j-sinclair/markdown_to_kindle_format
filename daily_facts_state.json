@@ -1572,6 +1572,52 @@
         "UK vs Jamaica: UK's figure not available today (web search: not found).",
         "UK vs Jamaica: Jamaica's figure not available today (web search: not found)."
       ]
+    },
+    "2026-11-19": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Reports that performance is often highest when relevant information is at the beginning or end of long inputs, and degrades when it is in the middle.",
+          "url": "https://aclanthology.org/2024.tacl-1.9/"
+        },
+        {
+          "model_attribution": "Frames context engineering as curating information for a limited context window, supporting the lesson’s emphasis on deliberate context assembly.",
+          "url": "https://www.anthropic.com/research/effective-context-engineering-for-ai-agents?embedable=true"
+        }
+      ],
+      "ai_theme": "Context engineering",
+      "ai_topic": "The Lost-in-the-Middle Effect",
+      "at": "2026-11-18T10:49:25+00:00",
+      "break": null,
+      "country": "GRC",
+      "country_fact": "density",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/EN.POP.DNST?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/EN.POP.DNST?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Prospect theory",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
