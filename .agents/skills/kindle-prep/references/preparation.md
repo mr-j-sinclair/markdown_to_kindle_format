@@ -106,7 +106,8 @@ nested bullet. Other label-plus-explanation forms must be split by hand:
 
 ## Images and videos
 
-- If normal image embedding fails, try direct download, then a browser
+- For emails, use available body/attachment images. If an image is absent or cannot be embedded straightforwardly, send the available text without delay, briefly noting material omissions; do not hold delivery to retrieve images or ask for replacements.
+- For other documents, if normal image embedding fails, try direct download, then a browser
   screenshot. If neither works, place an explicit image-unavailable notice
   at the original position; never silently omit an image except for the
   email-chrome exclusions below.
@@ -129,10 +130,10 @@ nested bullet. Other label-plus-explanation forms must be split by hand:
 
 ## Email ingestion
 
-These are `kindle-prep`'s full-content rules. Supplied `.eml` files default
-to `email-summary-to-kindle` unless explicit user intent selects this workflow
-(see `../SKILL.md`). Do not apply these full-content rules to email summaries.
-For user-supplied Desktop `.eml` files requested for Kindle, follow the confirmed-send cleanup procedure in `../SKILL.md`: actually delete the exact unchanged source files after SMTP acceptance. Retain them for failed/uncertain sends, previews/no-send runs, or explicit keep-source requests. Keep other source emails unless deletion is explicitly authorized.
+These are `kindle-prep`'s default full-content email rules. Only an explicit
+summary request selects `email-summary-to-kindle` (see `../SKILL.md`).
+Do not apply full-content output rules to explicitly requested summaries.
+For explicitly supplied `.eml` files from any original folder requested for Kindle, follow the confirmed-send cleanup procedure in `../SKILL.md`: actually delete the exact unchanged source files after SMTP acceptance. Retain them for failed/uncertain sends, previews/no-send runs, or explicit keep-source requests. No further confirmation is needed for that cleanup; never delete unspecified emails.
 
 Prefer the original `.eml` file over a PDF printout, since PDF exports can
 lose attachments and alter layout. If only a PDF printout exists, proceed
@@ -165,7 +166,7 @@ with best-effort text and link extraction under the same rules below.
 - For attached PDFs, extract hyperlinks from pypdf page annotations, via
   `/Annots` → `/A` → `/URI` — don't infer URLs from visible link text, which
   can silently point somewhere else.
-- Extract PDF-embedded images through `page.images`.
+- Extract PDF-embedded images through `page.images`. If `pypdf` is unavailable, installed PyMuPDF (`import pymupdf`) provides `page.get_text()`, `page.get_links()`, `page.get_images()` and `document.extract_image(xref)`; use actual link targets and inspect rendered pages rather than adding a dependency unnecessarily.
 - Extract inline `cid:` images and download accessible plain or signed CDN
   images.
 - Save extracted media beside the Markdown in `inputs/` and embed it with
@@ -174,6 +175,7 @@ with best-effort text and link extraction under the same rules below.
   graphic and reproduce its labels as plain text.
 - Use only link targets confirmed in source HTML, PDF annotations, or other
   source material; plainly mark unconfirmed targets. Never invent a URL.
+- Missing/unusable image attachments never block sending: deliver available text with a brief limitation note. If an essential non-image attachment cannot be inspected or faithfully included, stop before sending and keep the source; report the exact blocker rather than silently delivering incomplete content.
 - Account for every attachment and non-exempt image. Reproduce substantive
   or actionable attachments in full — reference numbers, deadlines, contact
   details, instructions — rather than summarizing them away as marketing

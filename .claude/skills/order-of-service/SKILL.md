@@ -194,9 +194,9 @@ reading is written:
   - notice sub-bullets are nested `<ul><li>`;
   - curly/nested quotes are intact.
 - After the send succeeds, delete the source `.eml` file(s) the user gave
-  from their Desktop (both the order-of-service and notices emails) per
-  `kindle-doc-prep`'s source-`.eml` cleanup rule; keep them if the send
-  failed.
+  (both the order-of-service and notices emails, from whatever folder
+  they were in) per `kindle-doc-prep`'s source-email cleanup rule; keep
+  them if the send failed.
 - Reply briefly: the file paths, whether it was sent, which `.eml` files
   were deleted, the readings used and your confidence in them, and any
   source typos or structural fixes.

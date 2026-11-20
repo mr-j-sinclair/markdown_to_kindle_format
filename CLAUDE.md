@@ -51,5 +51,6 @@ The Daily Facts automation (`daily_facts.py`, `.github/workflows/daily_facts.yml
 
 - Every deliverable goes only to the user's own personal Kindle for private, non-commercial reading, so reproduce the full text of any source the user supplies (web page, article, PDF, email, post). Do not shorten or summarise it on copyright grounds, and never pass `--no-send-to-kindle` for that reason.
 - Summarise or truncate only when the full text genuinely can't be obtained (paywall, login wall, fetch failure) or the user asks for a summary. Then the first content immediately after the document's `# Title` must be a bold notice saying why, immediately followed by a verified, working, clickable link to the original source, and both file names get a `_summary` suffix (`article_summary.md`, `article_summary.epub`).
+- Emails: full email is the default; summarise only when asked, in `kindle-doc-prep`'s short email-summary format (its From/Date/Subject line replaces the source link). Either way, delete the supplied email file(s) after a successful send.
 
 Keep this file at or below 150 lines; when adding a rule, merge or remove equivalent prose or move task-specific procedures to on-demand guidance.

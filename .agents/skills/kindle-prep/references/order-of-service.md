@@ -44,6 +44,8 @@ File: `inputs/order_of_service_<weekday>_<dd>_<month>_<yyyy>.md`, e.g.
 
 <Church name> · Theme: *<theme>*
 
+Stewards on duty: <team>
+
 ## Order of Service
 ## Responsive Reading — <reference>        (only if its text is given; see §3)
 ## Reading 1 — <Book> | Chapter <n> | Verses <a–b> (GNT)
@@ -51,6 +53,25 @@ File: `inputs/order_of_service_<weekday>_<dd>_<month>_<yyyy>.md`, e.g.
 ## Notices
 ## Any Other Business
 ```
+
+### Stewards on duty
+
+- Look up the date printed on the service sheet under `duty` in
+  `daily_facts_data/stewards_rota.yaml`. Use its `my_team` field to identify
+  the user's team. If the sheet omits the date, use an explicit service date
+  from the covering email or attachment filename.
+- Add one line below the theme. Use the matching format:
+    - User's team: `Stewards on duty: **Blue** — you're on duty` (use the
+      colour from the rota).
+    - Another team: `Stewards on duty: Red` (use the listed colour).
+    - An explicit `{none: <note>}` entry: `Stewards on duty: none (<note>)`.
+    - Service date after the latest date under `duty`:
+      `Stewards on duty: not known (rota on file ends <last date>)`.
+      Ask for the next rota in the delivery reply.
+    - Other missing entry or unavailable rota: `Stewards on duty: unknown`.
+      Ask for the rota covering that service date in the delivery reply.
+      If the service date itself is unclear, ask the user to confirm it.
+- Check the line against the service date and the rota during EPUB review.
 
 ### Order of Service section
 
