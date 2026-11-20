@@ -2695,6 +2695,139 @@ class BreakTests(Base):
         self.assertEqual(entry["ai_sources"], [])
 
 
+ROTA = """my_team: Blue
+teams: {Blue: Jonathan & Ben, Red: Rosie & Marcel}
+duty:
+  2027-03-07: Blue
+  2027-03-14: {none: "Joint service at Forest Hill"}
+  2027-03-28: Red
+  2027-04-11: Blue
+"""
+
+
+class StewardsTests(Base):
+    def rota(self, text=ROTA):
+        path = os.path.join(self.tmp, "stewards_rota.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return df.load_stewards(path)
+
+    def section(self, date, rota=None):
+        sel = df.select(day(date), self.data)
+        if rota is not None:
+            sel.stewards = df.stewards_for(day(date), rota)
+        return df._stewards_section(sel)
+
+    def build(self, date):
+        client = good_client()
+        sel = df.select(day(date), self.data)
+        sel.country = next(c for c in self.data["countries"] if c["cca3"] == "JAM")
+        sel.country_fact = self.fact("internet")
+        with patch.object(df, "http_get", FakeHTTP(default_routes())), contextlib.redirect_stderr(io.StringIO()):
+            facts = df.gather(sel, self.data, [], client=client)
+            markdown, _, _ = df.build_document(sel, facts, client=client)
+        return sel, facts, markdown, client
+
+    def test_states(self):
+        rota = self.rota()
+        self.assertEqual(rota["last"], day("2027-04-11"))
+        self.assertIn("**Blue team** (Jonathan & Ben) — **you are on duty today.**", self.section("2027-03-07", rota))
+        self.assertIn("**Red team** (Rosie & Marcel). You are not on duty.", self.section("2027-03-28", rota))
+        self.assertIn("No team on duty: Joint service at Forest Hill. You are not on duty.",
+                      self.section("2027-03-14", rota))
+        self.assertIn("> **This Sunday isn't in the stewards rota on file.**", self.section("2027-03-21", rota))
+        self.assertIn("> **This Sunday isn't in the stewards rota on file.**", self.section("2027-02-28", rota))
+        expired = self.section("2027-04-18", rota)
+        self.assertIn("ended on Sunday 11 April 2027; please send the next one.", expired)
+        self.assertNotIn("please send the next rota", expired)
+        for weekday in ("2027-03-08", "2027-03-13"):
+            self.assertIsNone(df.stewards_for(day(weekday), rota))
+
+    def test_reminder_boundary(self):
+        rota = self.rota()
+        self.assertIsNone(df.stewards_for(day("2027-03-14"), rota)["reminder"])   # 28 days before
+        self.assertIsNone(df.stewards_for(day("2027-03-21"), rota)["reminder"])   # 21 days before
+        for date in ("2027-03-28", "2027-04-04", "2027-04-11"):                   # 14, 7, 0 days before
+            self.assertEqual(df.stewards_for(day(date), rota)["reminder"],
+                             "The stewards rota on file ends on Sunday 11 April 2027 — please send the next rota.")
+
+    def test_validation(self):
+        good = "my_team: Blue\nteams: {Blue: A & B}\nduty:\n"
+        for text in ("my_team: Pink\nteams: {Blue: A & B}\nduty: {2027-03-07: Blue}\n",
+                     good,
+                     good + "  2027-03-07: Pink\n",
+                     good + "  2027-03-07: {none: ''}\n",
+                     good + "  2027-03-07: {none: x, also: y}\n",
+                     good + "  2027-03-07: Blue\n  2027-03-07: Blue\n",
+                     good + "  2027-03-07: Blue\n  '2027-03-07': Blue\n",
+                     good + "  2027-02-30: Blue\n",
+                     good + "  2027-03-07: {none: '[x](https://example.com)'}\n",
+                     good + "  2027-03-07: {none: 'see www.example.com'}\n",
+                     "my_team: Blue\nteams: {Blue: <b>A</b>}\nduty: {2027-03-07: Blue}\n",
+                     # Timestamps and non-ISO strings are not dates.
+                     good + "  2027-03-07T00:00:00Z: Blue\n",
+                     good + "  2027-03-07 10:30: Blue\n",
+                     good + "  '20270307': Blue\n",
+                     # Multi-line names and notes.
+                     "my_team: Blue\nteams: {Blue: \"A\\nB\"}\nduty: {2027-03-07: Blue}\n",
+                     good + "  2027-03-07: {none: \"Joint service\\nat Forest Hill\"}\n",
+                     good + "  2027-03-07:\n    none: |\n      Joint service\n      at Forest Hill\n",
+                     # Wrong shapes.
+                     "- a list\n", "just text\n", "",
+                     "my_team: Blue\nteams: [Blue]\nduty: {2027-03-07: Blue}\n",
+                     "my_team: Blue\nteams: {Blue: A & B}\nduty: [2027-03-07]\n",
+                     "my_team: [Blue]\nteams: {Blue: A & B}\nduty: {2027-03-07: Blue}\n"):
+            with self.assertRaises(ValueError, msg=text):
+                self.rota(text)
+
+    def test_real_rota(self):
+        rota = self.data["stewards"]
+        self.assertEqual(rota["my_team"], "Blue")
+        self.assertEqual(rota["teams"], {"Blue": "Jonathan & Ben", "Red": "Rosie & Marcel",
+                                         "Green": "Chris & Daniel"})
+        expected = {
+            "2026-09-06": "Blue", "2026-09-13": "Joint service at Forest Hill", "2026-09-20": "Red",
+            "2026-09-27": "Green", "2026-10-04": "Blue", "2026-10-11": "Red", "2026-10-18": "Green",
+            "2026-10-25": "Blue", "2026-11-01": "Green", "2026-11-08": "Blue", "2026-11-15": "Red",
+            "2026-11-22": "Circuit Morning Service at EP", "2026-11-29": "Blue",
+            "2026-12-06": "Green", "2026-12-13": "Red", "2026-12-20": "Blue",
+            "2026-12-24": "Christmas Eve, no service", "2026-12-25": "Joint service at Forest Hill",
+            "2026-12-27": "Red", "2027-01-03": "Green", "2027-01-10": "Blue", "2027-01-17": "Red",
+            "2027-01-24": "Green", "2027-01-31": "Blue", "2027-02-07": "Red", "2027-02-14": "Green",
+            "2027-02-21": "Blue", "2027-02-28": "Red"}
+        self.assertEqual(len(expected), 28)
+        self.assertEqual({d.isoformat(): team or rota["notes"][d] for d, team in rota["duty"].items()}, expected)
+        self.assertEqual(set(rota["notes"]), {d for d, team in rota["duty"].items() if team is None})
+        blue = df.stewards_for(day("2026-11-29"), rota)
+        self.assertEqual((blue["team"], blue["names"], blue["mine"]), ("Blue", "Jonathan & Ben", True))
+        self.assertEqual(df.stewards_for(day("2026-11-22"), rota)["note"], "Circuit Morning Service at EP")
+        self.assertIsNone(df.stewards_for(day("2026-11-22"), rota)["team"])
+        self.assertIsNone(df.stewards_for(day("2027-02-07"), rota)["reminder"])
+        for date in ("2027-02-14", "2027-02-21", "2027-02-28"):
+            self.assertIn("ends on Sunday 28 February 2027", df.stewards_for(day(date), rota)["reminder"], date)
+        self.assertIn("ended on Sunday 28 February 2027", df.stewards_for(day("2027-03-07"), rota)["missing"])
+
+    def test_sunday_document(self):
+        sel, facts, markdown, client = self.build("2026-11-29")
+        self.assertIn("## Stewards on Duty\n\n**Blue team** (Jonathan & Ben) — **you are on duty today.**", markdown)
+        self.assertLess(markdown.index("## Stewards on Duty"), markdown.index("## Weather in Croydon"))
+        review = next(r for r in client.requests if r["text"]["format"]["name"] == "run_check")
+        self.assertNotIn("Stewards", review["input"])
+        df.check_links(markdown, df.allowed_links(sel, facts))
+
+    def test_break_sunday_document(self):
+        sel, facts, markdown, _ = self.build("2026-11-15")
+        notice = markdown.index("> **Break day — Birthday break.**")
+        stewards = markdown.index("## Stewards on Duty\n\n**Red team** (Rosie & Marcel). You are not on duty.")
+        self.assertLess(notice, stewards)
+        self.assertLess(stewards, markdown.index("## Weather in Croydon"))
+        df.check_links(markdown, df.allowed_links(sel, facts))
+
+    def test_weekday_document_has_no_stewards(self):
+        _, _, markdown, _ = self.build("2026-11-27")
+        self.assertNotIn("Stewards", markdown)
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         workflow = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

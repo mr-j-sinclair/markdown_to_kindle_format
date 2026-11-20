@@ -626,6 +626,19 @@ named `blackouts` (Birthday break 9-16 November 2026, Christmas & New Year
 - Add or change future dates only: editing a past break re-times every
   later Sunday Reading.
 
+### Stewards on duty (added 2026-11-20)
+
+`daily_facts_data/stewards_rota.yaml` holds the church stewards rota
+(transcribed from the quarterly PDFs in Dropbox `General/church/Steward/`);
+the order-of-service skill reads the same file. Every Sunday document
+opens with a code-built "Stewards on Duty" line (after the notice on a
+break Sunday) naming the team on duty and whether it is yours (`my_team`), or the note
+when no team is on duty. The run check (call C) does not review it. From two
+weeks before the last date on file it asks for the next rota; after that
+date it says the rota has ended. To add the next quarter, append its dates
+under `duty`, each mapped to a team colour or `{none: "<note>"}`, and run
+`.venv/bin/python3 -m unittest tests.test_daily_facts`.
+
 ## Mermaid diagrams
 
 Fenced ` ```mermaid ` code blocks are rendered to embedded colour images

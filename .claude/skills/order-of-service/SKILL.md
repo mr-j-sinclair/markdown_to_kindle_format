@@ -44,6 +44,8 @@ File: `inputs/order_of_service_<weekday>_<dd>_<month>_<yyyy>.md`, e.g.
 
 <Church name> · Theme: *<theme>*
 
+Stewards on duty: <team>                    (see "Stewards line" below)
+
 ## Order of Service
 ## Responsive Reading — <reference>        (only if its text is given; see §3)
 ## Reading 1 — <Book> | Chapter <n> | Verses <a–b> (GNT)
@@ -51,6 +53,19 @@ File: `inputs/order_of_service_<weekday>_<dd>_<month>_<yyyy>.md`, e.g.
 ## Notices
 ## Any Other Business
 ```
+
+### Stewards line
+
+- Look up the service date in `daily_facts_data/stewards_rota.yaml`
+  (`duty`); the user's team is `my_team`. Write exactly one of:
+  - `Stewards on duty: **<Colour>** — you're on duty` (the team is
+    `my_team`);
+  - `Stewards on duty: <Colour>` (any other team);
+  - `Stewards on duty: none (<note>)` (a `{none: <note>}` entry).
+- If the date is not in `duty` (missing, or past the last date), write
+  `Stewards on duty: not known (rota on file ends <last date>)` and, in the
+  chat reply, ask the user for the next rota (PDFs in Dropbox
+  `General/church/Steward/`).
 
 ### Order of Service section
 

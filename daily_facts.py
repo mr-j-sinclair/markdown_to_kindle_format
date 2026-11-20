@@ -207,6 +207,7 @@ def load_data(data_dir: str = DATA_DIR) -> dict:
         "country_facts": read("country_facts.json")["facts"],
         "sunday": read("sunday_reading.json"),
         "calendar": load_calendar(os.path.join(data_dir, "calendar.yaml")),
+        "stewards": load_stewards(os.path.join(data_dir, "stewards_rota.yaml")),
     }
 
 
@@ -264,6 +265,104 @@ def break_for(date: datetime.date, calendar: dict):
     raise ValueError(f"calendar: no day without a break within 400 days of {date}")
 
 
+# ---------- stewards rota ----------
+
+STEWARDS_REMINDER_DAYS = 14    # ask for the next rota this many days before the one on file ends
+_ROTA_TEXT_RE = re.compile(r"[\[\]<>*_`|\\$#]|https?:|www\.", re.IGNORECASE)
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """yaml.SafeLoader that rejects a mapping key given twice (PyYAML keeps the last silently)."""
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise ValueError(f"stewards rota: duplicate key {key!r}")
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def _rota_text(value, what: str) -> str:
+    """A non-empty one-line plain-text rota value (names, notes): no links or
+    Markdown, as it is rendered as-is."""
+    text = value.strip() if isinstance(value, str) else ""
+    if not text or "\n" in text or "\r" in text or _ROTA_TEXT_RE.search(text):
+        raise ValueError(f"stewards rota: bad {what} {value!r}")
+    return text
+
+
+def _rota_date(key) -> datetime.date:
+    """A duty key: a plain YAML date or a YYYY-MM-DD string (not a timestamp)."""
+    if isinstance(key, datetime.date) and not isinstance(key, datetime.datetime):
+        return key
+    if isinstance(key, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", key):
+        return datetime.date.fromisoformat(key)
+    raise ValueError(f"stewards rota: bad date {key!r}")
+
+
+def _mapping(value, what: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"stewards rota: {what} must be a mapping")
+    return value
+
+
+def load_stewards(path: str) -> dict:
+    """stewards_rota.yaml, validated: {"my_team", "teams" {colour: names},
+    "duty" {date: colour, or None for no team}, "notes" {date: note} (the
+    no-team dates), "last"}. Raises ValueError."""
+    with open(path, encoding="utf-8") as f:
+        raw = _mapping(yaml.load(f, Loader=_UniqueKeyLoader), "the file")
+    teams = {_rota_text(colour, "team"): _rota_text(names, "team names")
+             for colour, names in _mapping(raw.get("teams"), "teams").items()}
+    my_team = raw.get("my_team")
+    if not isinstance(my_team, str) or my_team not in teams:
+        raise ValueError(f"stewards rota: my_team {my_team!r} is not in teams")
+    duty, notes = {}, {}
+    for key, value in _mapping(raw.get("duty"), "duty").items():
+        date = _rota_date(key)
+        if date in duty:
+            raise ValueError(f"stewards rota: duplicate date {date}")
+        if isinstance(value, dict) and list(value) == ["none"]:
+            duty[date], notes[date] = None, _rota_text(value["none"], f"note for {date}")
+        elif isinstance(value, str) and value in teams:
+            duty[date] = value
+        else:
+            raise ValueError(f"stewards rota: {date} must be a team in teams or {{none: <note>}}, not {value!r}")
+    if not duty:
+        raise ValueError("stewards rota: no duty dates")
+    return {"my_team": my_team, "teams": teams, "duty": duty, "notes": notes, "last": max(duty)}
+
+
+def _long_date(date: datetime.date) -> str:
+    return f"{date:%A} {date.day} {date:%B %Y}"
+
+
+def stewards_for(date: datetime.date, rota: dict):
+    """On a Sunday: {"team", "names", "mine", "note", "missing", "reminder"}
+    (one of team / note / missing is set); None on other days. "reminder"
+    asks for the next rota from STEWARDS_REMINDER_DAYS before the last date
+    on file; after that date "missing" says the rota has ended instead."""
+    if date.weekday() != 6:
+        return None
+    last = rota["last"]
+    found = {"team": None, "names": None, "mine": False, "note": None, "missing": None, "reminder": None}
+    if date > last:
+        found["missing"] = f"The stewards rota on file ended on {_long_date(last)}; please send the next one."
+        return found
+    if (last - date).days <= STEWARDS_REMINDER_DAYS:
+        found["reminder"] = f"The stewards rota on file ends on {_long_date(last)} — please send the next rota."
+    if date not in rota["duty"]:
+        found["missing"] = "This Sunday isn't in the stewards rota on file."
+    elif rota["duty"][date] is None:
+        found["note"] = rota["notes"][date]
+    else:
+        team = rota["duty"][date]
+        found.update(team=team, names=rota["teams"][team], mine=team == rota["my_team"])
+    return found
+
+
 def _shuffled(n: int, category: str, cycle: int) -> list:
     order = list(range(n))
     seed = int.from_bytes(hashlib.sha256(f"{category}:{cycle}".encode()).digest(), "big")
@@ -304,6 +403,7 @@ class Selection:
     country_fact: dict      # one country_facts.json entry, for both countries
     sunday: dict = None     # sunday_reading(); None on other days (AI Engineering instead)
     on_break: dict = None   # break_for(); a break day has only the notice, the weather and the flag
+    stewards: dict = None   # stewards_for(); Sundays only, break Sundays included
 
 
 def select(date: datetime.date, data: dict) -> Selection:
@@ -320,6 +420,7 @@ def select(date: datetime.date, data: dict) -> Selection:
         country_fact=pick(data["country_facts"], "country-fact"),
         sunday=sunday_reading(date, data["sunday"], data["calendar"]),
         on_break=break_for(date, data["calendar"]),
+        stewards=stewards_for(date, data["stewards"]),
     )
 
 
@@ -2452,6 +2553,23 @@ def _break_section(sel: Selection) -> str:
             f"Back on {back:%A} {back.day} {back:%B}.")
 
 
+def _stewards_section(sel: Selection) -> str:
+    """Who is on duty from the stewards rota file: code-built, no model, no links."""
+    s = sel.stewards
+    if s["team"] and s["mine"]:
+        line = f"**{s['team']} team** ({s['names']}) — **you are on duty today.**"
+    elif s["team"]:
+        line = f"**{s['team']} team** ({s['names']}). You are not on duty."
+    elif s["note"]:
+        line = f"No team on duty: {s['note']}. You are not on duty."
+    else:
+        line = f"> **{s['missing']}**"
+    lines = ["## Stewards on Duty", "", line]
+    if s["reminder"]:
+        lines += ["", f"> **{s['reminder']}**"]
+    return "\n".join(lines)
+
+
 def render_sections(sel: Selection, facts: Facts) -> dict:
     """{call C section key: rendered section}, in document order."""
     if sel.on_break:
@@ -2467,16 +2585,20 @@ def render_sections(sel: Selection, facts: Facts) -> dict:
     }
 
 
-def render_body(sel: Selection, facts: Facts, reviewer_notes: dict = None) -> str:
+def render_body(sel: Selection, facts: Facts, reviewer_notes: dict = None, stewards: bool = True) -> str:
     """The sections. reviewer_notes ({section key: [disagreement]}) adds
     call C's disagreements after the section's sourced content, which is
-    unchanged; unavailable sections get none."""
+    unchanged; unavailable sections get none. stewards adds the Sunday
+    Stewards on Duty section (first, or after a break notice); call C's
+    copy leaves it out, as it is the user's own rota, not a sourced claim."""
     parts = []
     for key, text in render_sections(sel, facts).items():
         if _UNAVAILABLE not in text:
             text += "".join(f"\n\n{_reviewer_note(d['note'], d['url'])}"
                             for d in (reviewer_notes or {}).get(key, []))
         parts.append(text)
+    if stewards and sel.stewards:
+        parts.insert(1 if sel.on_break else 0, _stewards_section(sel))
     return "\n\n".join(parts)
 
 
@@ -2549,11 +2671,12 @@ def check_links(document: str, allowed: set) -> None:
 
 def build_document(sel: Selection, facts: Facts, client=None):
     """Return (markdown, warnings, disagreements) with the run-check box under
-    the title. Call C reviews the body without reviewer notes; its
-    disagreements with sourced claims are then added under their sections
-    and are not counted as warnings. Raises UnsafeDocumentError if the final
-    document links anywhere code did not put a link."""
-    body = render_body(sel, facts)
+    the title. Call C reviews the body without reviewer notes or the
+    stewards section; its disagreements with sourced claims are then added
+    under their sections and are not counted as warnings. Raises
+    UnsafeDocumentError if the final document links anywhere code did not
+    put a link."""
+    body = render_body(sel, facts, stewards=False)
     sections = render_sections(sel, facts)
     review = _llm(lambda: review_document(assemble(sel.date, "", body), facts.diagnostics, client=client,
                                           sections=sections),

@@ -1,0 +1,53 @@
+# Wesley Hall church stewards rota: which team of stewards is on duty each
+# service date. Read by daily_facts.py (a "Stewards on Duty" line on Sunday
+# documents) and by the order-of-service skill (one line in the service
+# document), so keep it as the single copy of the rota.
+#
+# Source: the quarterly rota PDFs in Dropbox `General/church/Steward/`.
+# A yellow cell in the PDF means the service is elsewhere (a joint or circuit
+# service), so no Wesley Hall team is on duty; a blank cell means no service.
+# Both are written as {none: "<note>"}.
+#
+# Adding the next quarter: append its dates under `duty` (keep date order),
+# each mapped to a team colour from `teams` or to {none: "<note>"}. Quote
+# notes; plain text only (no links or Markdown). Daily Facts starts asking for
+# the next rota two weeks before the last date on file.
+
+my_team: Blue
+
+teams:
+  Blue: Jonathan & Ben
+  Red: Rosie & Marcel
+  Green: Chris & Daniel
+
+duty:
+  # September - November 2026
+  2026-09-06: Blue
+  2026-09-13: {none: "Joint service at Forest Hill"}
+  2026-09-20: Red
+  2026-09-27: Green
+  2026-10-04: Blue
+  2026-10-11: Red
+  2026-10-18: Green
+  2026-10-25: Blue
+  2026-11-01: Green
+  2026-11-08: Blue
+  2026-11-15: Red
+  2026-11-22: {none: "Circuit Morning Service at EP"}
+  2026-11-29: Blue
+  # December 2026 - February 2027
+  2026-12-06: Green
+  2026-12-13: Red
+  2026-12-20: Blue
+  2026-12-24: {none: "Christmas Eve, no service"}
+  2026-12-25: {none: "Joint service at Forest Hill"}
+  2026-12-27: Red
+  2027-01-03: Green
+  2027-01-10: Blue
+  2027-01-17: Red
+  2027-01-24: Green
+  2027-01-31: Blue
+  2027-02-07: Red
+  2027-02-14: Green
+  2027-02-21: Blue
+  2027-02-28: Red
