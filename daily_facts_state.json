@@ -1665,6 +1665,52 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-21": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Defines behavioural evaluations as checks on discrete, observable agent actions; gives examples, recommends flexible assertions for complex tasks, and describes using batches to monitor stability.",
+          "url": "https://developers.googleblog.com/the-anatomy-of-harness-engineering-how-to-evaluate-iterate-and-guard-ai-coding-agents/"
+        }
+      ],
+      "ai_theme": "Harness engineering",
+      "ai_topic": "Behavioural Evals for Agent Harnesses",
+      "at": "2026-11-20T10:40:37+00:00",
+      "break": null,
+      "country": "ESP",
+      "country_fact": "obesity",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/prevalence-of-obesity-among-adults-bmi-=-30-(age-standardized-estimate)-(-)",
+          "via": "api"
+        },
+        "UK": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/prevalence-of-obesity-among-adults-bmi-=-30-(age-standardized-estimate)-(-)",
+          "via": "api"
+        }
+      },
+      "research_title": "Rite of passage",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Croydon weather forecast was unavailable because the Open-Meteo request failed.",
+        "Croydon weather unavailable (Open-Meteo forecast: URLError)."
+      ]
     }
   }
 }
