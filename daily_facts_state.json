@@ -1711,6 +1711,41 @@
         "Croydon weather forecast was unavailable because the Open-Meteo request failed.",
         "Croydon weather unavailable (Open-Meteo forecast: URLError)."
       ]
+    },
+    "2026-11-22": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-11-21T10:18:49+00:00",
+      "break": null,
+      "country": "MDV",
+      "country_fact": "internet",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Glorious Revolution",
+      "reviewer_disagreements": [],
+      "sunday_reading": "Sirach 3–4",
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
