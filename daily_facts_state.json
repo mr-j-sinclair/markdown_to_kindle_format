@@ -1746,6 +1746,57 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-23": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "FrugalGPT describes an LLM cascade that selects model combinations for different queries to reduce cost while maintaining or improving accuracy.",
+          "url": "https://arxiv.org/abs/2305.05176"
+        },
+        {
+          "model_attribution": "The paper describes escalating to a stronger model when a quality estimator judges the earlier-stage output low-quality.",
+          "url": "https://arxiv.org/abs/2606.27457"
+        }
+      ],
+      "ai_theme": "Model routing and cost",
+      "ai_topic": "Quality-Gated Model Cascades",
+      "at": "2026-11-22T10:26:44+00:00",
+      "break": null,
+      "country": "CAN",
+      "country_fact": "inflation",
+      "country_fact_compared": [
+        false,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 3
+      },
+      "country_fact_sources": {
+        "UK": {
+          "model_attribution": "The World Bank page lists UK consumer price inflation at 3.9% for 2025.",
+          "org": "World Bank",
+          "tier": 2,
+          "unit_note": "Annual percentage change in consumer prices, whole UK.",
+          "url": "https://data.worldbank.org/indicator/FP.CPI.TOTL.ZG?locations=GBR",
+          "via": "search"
+        }
+      },
+      "research_title": "Superconductivity",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "open_page": 2,
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": [
+        "Population unavailable (World Bank SP.POP.TOTL: TimeoutError).",
+        "UK vs Jamaica: IMF World Economic Outlook API unavailable (IMF PCPIPCH: HTTPError 404); tried a web search instead.",
+        "UK vs Jamaica: Jamaica's figure not available today (web search: implausible year)."
+      ]
     }
   }
 }
