@@ -1797,6 +1797,53 @@
         "UK vs Jamaica: IMF World Economic Outlook API unavailable (IMF PCPIPCH: HTTPError 404); tried a web search instead.",
         "UK vs Jamaica: Jamaica's figure not available today (web search: implausible year)."
       ]
+    },
+    "2026-11-24": {
+      "ai_search_actions": {
+        "open_page": 1,
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Explains how persisted workflow steps support recovery after process or network failure, and illustrates a multi-step workflow.",
+          "url": "https://assets.temporal.io/durable-execution.pdf"
+        },
+        {
+          "model_attribution": "Describes persistent agent sessions, crash recovery, long-running human approval waits and checkpointed multi-agent orchestration.",
+          "url": "https://learn.microsoft.com/en-us/azure/durable-task/sdks/durable-agents-microsoft-agent-framework"
+        }
+      ],
+      "ai_theme": "Frameworks and patterns",
+      "ai_topic": "Durable Execution for Agents",
+      "at": "2026-11-23T11:24:14+00:00",
+      "break": null,
+      "country": "NAM",
+      "country_fact": "doctors",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/medical-doctors-(per-10-000-population)",
+          "via": "api"
+        },
+        "UK": {
+          "org": "WHO",
+          "url": "https://www.who.int/data/gho/data/indicators/indicator-details/GHO/medical-doctors-(per-10-000-population)",
+          "via": "api"
+        }
+      },
+      "research_title": "Telegraphy",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
