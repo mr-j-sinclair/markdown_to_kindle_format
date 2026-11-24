@@ -1844,6 +1844,61 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-11-25": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "Distinguishes sandbox resume or snapshots, which preserve workspace state, from sandbox memory, which distils useful lessons into files for later runs.",
+          "url": "https://developers.openai.com/api/docs/guides/agents/sandboxes?site_locale=en"
+        },
+        {
+          "model_attribution": "Describes reusing sandbox memories across later runs and clarifies that a fresh empty sandbox starts with empty memory.",
+          "url": "https://openai.github.io/openai-agents-python/sandbox/memory/"
+        }
+      ],
+      "ai_theme": "AI memory and agent state",
+      "ai_topic": "Memory Is Not a Snapshot",
+      "at": "2026-11-24T01:19:07+00:00",
+      "break": null,
+      "country": "AND",
+      "country_fact": "under-five-mortality",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The page reports Jamaica’s under-five mortality rate as 17.8 deaths per 1,000 live births in 2024.",
+          "org": "UNICEF",
+          "tier": 1,
+          "unit_note": "Probability of dying before age five, per 1,000 live births.",
+          "url": "https://data.unicef.org/country/jam/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The table reports the United Kingdom’s 2024 under-five mortality rate as 4.7 deaths per 1,000 live births.",
+          "org": "UN IGME",
+          "tier": 1,
+          "unit_note": "Probability of dying before age five, per 1,000 live births.",
+          "url": "https://childmortality.org/wp-content/uploads/2026/03/UNIGME-Child-Mortality-Report-2025.pdf",
+          "via": "search"
+        }
+      },
+      "research_title": "Entropy",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "open_page": 1,
+        "search": 2
+      },
+      "thameslink_status": "none_found",
+      "warnings": []
     }
   }
 }
