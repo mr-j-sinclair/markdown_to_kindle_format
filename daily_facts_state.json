@@ -1899,6 +1899,63 @@
       },
       "thameslink_status": "none_found",
       "warnings": []
+    },
+    "2026-11-26": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "The guide describes pausing before sensitive tool calls, reviewing an approval request, and resuming a paused or delayed run from its saved state.",
+          "url": "https://developers.openai.com/api/docs/guides/agents/guardrails-approvals"
+        },
+        {
+          "model_attribution": "The guide recommends checking the proposed target, action, tool arguments and relevant scope before allowing an action.",
+          "url": "https://developers.openai.com/api/docs/guides/agent-builder-safety"
+        }
+      ],
+      "ai_theme": "Human-in-the-loop systems",
+      "ai_topic": "Decision-Ready Approval Cards",
+      "at": "2026-11-25T11:50:34+00:00",
+      "break": null,
+      "country": "AZE",
+      "country_fact": "women-in-parliament",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {
+        "search": 1
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The page states that 19 of 63 House of Representatives seats are held by women, or 30.2%.",
+          "org": "Inter-Parliamentary Union",
+          "tier": 1,
+          "unit_note": "Percentage of House of Representatives seats held by women; latest figure shown.",
+          "url": "https://data.ipu.org/parliament/JM/JM-LC01/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The page states that women held 267 of 650 House of Commons seats, or 41.1%, in October 2026.",
+          "org": "Inter-Parliamentary Union",
+          "tier": 1,
+          "unit_note": "Percentage of House of Commons seats held by women; updated October 2026.",
+          "url": "https://data.ipu.org/parliament/GB/GB-LC01/data-on-women/",
+          "via": "search"
+        }
+      },
+      "research_title": "Catalysis",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Croydon weather forecast unavailable: Open-Meteo returned a URL error.",
+        "Croydon weather unavailable (Open-Meteo forecast: URLError)."
+      ]
     }
   }
 }
