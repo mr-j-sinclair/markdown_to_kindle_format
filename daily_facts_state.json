@@ -1956,6 +1956,65 @@
         "Croydon weather forecast unavailable: Open-Meteo returned a URL error.",
         "Croydon weather unavailable (Open-Meteo forecast: URLError)."
       ]
+    },
+    "2026-11-27": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "The Magentic manager selects the next agent based on evolving context, task progress and agent capabilities, while maintaining shared context and adapting the workflow.",
+          "url": "https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/magentic"
+        },
+        {
+          "model_attribution": "Dynamic task planning and collaboration among specialised agents are appropriate for complex, open-ended tasks.",
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns"
+        }
+      ],
+      "ai_theme": "Multi-agent systems and orchestration",
+      "ai_topic": "Magentic Manager Orchestration",
+      "at": "2026-11-26T11:35:18+00:00",
+      "break": null,
+      "country": "MWI",
+      "country_fact": "homelessness",
+      "country_fact_compared": [
+        false,
+        "the two countries define and count homelessness differently"
+      ],
+      "country_fact_search_actions": {
+        "open_page": 3,
+        "search": 3
+      },
+      "country_fact_sources": {
+        "Jamaica": {
+          "model_attribution": "The last National Homeless Survey, conducted in 2017, identified 1,938 individuals experiencing homelessness across Jamaica.",
+          "org": "Jamaica Information Service",
+          "tier": 1,
+          "unit_note": "Individuals identified as experiencing homelessness in the national survey.",
+          "url": "https://jis.gov.jm/board-of-supervision-urges-community-support-to-address-homelessness/",
+          "via": "search"
+        },
+        "UK": {
+          "model_attribution": "The autumn 2025 snapshot estimated 4,793 people were sleeping rough in England on a single night.",
+          "org": "UK Government",
+          "tier": 2,
+          "unit_note": "People estimated to be sleeping rough on one night in autumn in England.",
+          "url": "https://www.gov.uk/government/statistics/rough-sleeping-snapshot-in-england-autumn-2025/rough-sleeping-snapshot-in-england-autumn-2025",
+          "via": "search"
+        }
+      },
+      "research_title": "CRISPR gene editing",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Windrush line notices cover 23–26 November, all before the digest date.",
+        "Jamaica’s homelessness figure is from 2017, while England’s is from 2025, as noted in diagnostics.",
+        "UK vs Jamaica: Jamaica's latest 'Homelessness (UK: England)' figure is from 2017."
+      ]
     }
   }
 }
