@@ -2015,6 +2015,52 @@
         "Jamaica’s homelessness figure is from 2017, while England’s is from 2025, as noted in diagnostics.",
         "UK vs Jamaica: Jamaica's latest 'Homelessness (UK: England)' figure is from 2017."
       ]
+    },
+    "2026-11-28": {
+      "ai_search_actions": {
+        "search": 1
+      },
+      "ai_sources": [
+        {
+          "model_attribution": "LOCA-bench controls context length in agent tasks and evaluates agents in dynamically growing-context scenarios; the paper describes reliability deterioration as context grows.",
+          "url": "https://proceedings.mlr.press/v306/zeng26g.html"
+        },
+        {
+          "model_attribution": "Anthropic describes context engineering as curating information for the context window and explains that compaction selects what to retain or discard.",
+          "url": "https://www.anthropic.com/research/effective-context-engineering-for-ai-agents"
+        }
+      ],
+      "ai_theme": "Context engineering",
+      "ai_topic": "Context-Growth Stress Tests",
+      "at": "2026-11-27T11:29:45+00:00",
+      "break": null,
+      "country": "BRA",
+      "country_fact": "urban",
+      "country_fact_compared": [
+        false,
+        "each country uses its own definition of an urban area"
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/SP.URB.TOTL.IN.ZS?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/SP.URB.TOTL.IN.ZS?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Public-key cryptography",
+      "reviewer_disagreements": [],
+      "sunday_reading": null,
+      "thameslink_search_actions": {
+        "search": 1
+      },
+      "thameslink_status": "disruption",
+      "warnings": []
     }
   }
 }
