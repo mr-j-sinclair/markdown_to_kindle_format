@@ -2061,6 +2061,46 @@
       },
       "thameslink_status": "disruption",
       "warnings": []
+    },
+    "2026-11-29": {
+      "ai_search_actions": {},
+      "ai_sources": [],
+      "ai_theme": null,
+      "ai_topic": null,
+      "at": "2026-11-28T10:58:27+00:00",
+      "break": null,
+      "country": "SOM",
+      "country_fact": "internet",
+      "country_fact_compared": [
+        true,
+        ""
+      ],
+      "country_fact_search_actions": {},
+      "country_fact_sources": {
+        "Jamaica": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=JM",
+          "via": "api"
+        },
+        "UK": {
+          "org": "World Bank",
+          "url": "https://data.worldbank.org/indicator/IT.NET.USER.ZS?locations=GB",
+          "via": "api"
+        }
+      },
+      "research_title": "Containerization",
+      "reviewer_disagreements": [],
+      "sunday_reading": "Sirach 5–6",
+      "thameslink_search_actions": {
+        "open_page": 1,
+        "search": 2
+      },
+      "thameslink_status": "disruption",
+      "warnings": [
+        "Croydon weather forecast is unavailable; the run diagnostics report an Open-Meteo HTTP 429 error.",
+        "Sirach 5 appears truncated: the chapter ends at verse 15 before Sirach 6 begins.",
+        "Croydon weather unavailable (Open-Meteo forecast: HTTPError 429)."
+      ]
     }
   }
 }
